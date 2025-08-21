@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>スプラトゥーン3 ブキルーレット (オフライン版)</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1>スプラトゥーン3｜ブキルーレット (オフライン版)</h1>
+      <div class="controls">
+        <div class="pill">
+          <label for="playerCount" style="margin-right: 8px; cursor: pointer;">プレイヤー数</label>
+          <input id="playerCount" type="number" min="1" max="8" value="1">
+        </div>
+        <button id="spinBtn" class="btn" aria-label="ルーレットをゆっくり回す">回す</button>
+        <label class="switch pill" title="抽選済みを次回から除外">
+          <input id="noRepeat" type="checkbox" />
+          <span>重複なし</span>
+        </label>
+        <button id="resetBtn" class="btn danger" aria-label="履歴と状態をリセット">リセット</button>
+        <button id="fullscreenBtn" class="btn secondary icon" title="全画面表示" aria-label="全画面表示の切り替え">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <section class="card" aria-live="polite">
+        <div class="display">
+          <div id="resultContainer">
+            <div id="resultName" class="name">準備OK</div>
+            <div id="resultClass" class="class">プレイヤー数を選択して「回す」を押してください</div>
+          </div>
+          <div class="ticker"></div>
+        </div>
+        <!-- ▼ここから追加：確率表 -->
+        <div class="card" style="margin-top:12px;">
+          <strong>各ブキの排出確率</strong>
+          <div id="probTableWrap" style="max-height:220px;overflow:auto;margin-top:8px;">
+            <table id="probTable" style="width:100%;border-collapse:collapse;font-size:13px;">
+              <!-- 動的生成 -->
+            </table>
+          </div>
+        </div>
+        <!-- ▲ここまで追加 -->
+        <div class="card" style="margin-top:12px">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+            <strong>ブキ絞り込み</strong>
+          </div>
+          <div id="classFilters" class="grid"></div>
+        </div>
+      </section>
+
+      <aside class="card">
+        <div style="display:flex; justify-content:space-between; align-items: center; margin-bottom:8px;">
+          <strong>履歴</strong>
+          <span id="historyCount" class="muted">0 件</span>
+        </div>
+        <div id="history" class="history">
+          <div class="empty">まだ結果がありません</div>
+        </div>
+      </aside>
+    </div>
+
+    <footer>
+      リストは <code>weapons.js</code> ファイルを編集して自由に追加・削除できます。— 作成：あなたの環境だけで動くシンプルなHTML一枚アプリ。
+    </footer>
+  </div>
+  <script>
+    // オフラインモードフラグを設定
+    window.IS_OFFLINE_MODE = true;
+  </script>
+  <script src="weapons.js"></script>
+  <script src="script.js" defer></script>
+</body>
+</html>
