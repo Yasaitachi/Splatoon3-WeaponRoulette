@@ -1,2 +1,2 @@
 # Splatoon3-WeaponRoulette
-動作確認済み（PCのみ）
+対応ゲームバージョン Ver.10.0.0以降
