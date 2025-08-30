@@ -1,4 +1,4 @@
-**日本語** / [English](./README_EN.md)
+**日本語** / [English]((https://github.com/Yasaitachi/Splatoon3-WeaponRoulette/blob/main/README_EN.md)
 
 # Splatoon 3 Weapon Roulette
 
