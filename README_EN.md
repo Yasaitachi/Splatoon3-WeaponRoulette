@@ -1,4 +1,4 @@
-[日本語](./README.md) / **English**
+**English**
 
 # Splatoon 3 Weapon Roulette
 
