@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>スプラトゥーン3 ブキルーレット</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1 data-i18n-key="app-title">スプラトゥーン3｜ブキルーレット</h1>
+      <div class="controls">
+        <div class="pill">
+          <label for="playerCount" style="margin-right: 8px; cursor: pointer;" data-i18n-key="players">プレイヤー数</label>
+          <input id="playerCount" type="number" min="1" max="8" value="1">
+        </div>
+        <button id="spinBtn" class="btn" data-i18n-aria-label="spin" data-i18n-key="spin">回す</button>
+        <label class="switch pill" data-i18n-title="no-repeat-title">
+          <input id="noRepeat" type="checkbox" />
+          <span data-i18n-key="no-repeat">重複なし</span>
+        </label>
+        <button id="resetBtn" class="btn danger" data-i18n-aria-label="reset" data-i18n-key="reset">リセット</button>
+        <button id="fullscreenBtn" class="btn secondary icon" data-i18n-title="fullscreen" data-i18n-aria-label="fullscreen-toggle">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        </button>
+        <button id="settingsBtn" class="btn secondary icon" data-i18n-title="settings">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="layout">
+      <section class="card" aria-live="polite">
+        <div class="display">
+          <div id="resultContainer" class="result-container">
+            <div id="resultName" class="name" data-i18n-key="initial-display-name">準備OK</div>
+            <div id="resultDetails" class="details" data-i18n-key="initial-display-class">プレイヤー数を選択して「回す」を押してください</div>
+          </div>
+          <div class="ticker"></div>
+        </div>
+        <!-- ▼ここから追加：確率表 -->
+        <div class="card" style="margin-top:12px;">
+          <strong data-i18n-key="probability-title">各ブキの排出確率</strong>
+          <div id="probTableWrap" style="max-height:220px;overflow:auto;margin-top:8px;">
+            <table id="probTable" style="width:100%;border-collapse:collapse;font-size:13px;">
+              <!-- 動的生成 -->
+            </table>
+          </div>
+        </div>
+        <!-- ▲ここまで追加 -->
+        <div class="card" style="margin-top:12px">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+            <strong data-i18n-key="filter-title">ブキ絞り込み</strong>
+          </div>
+          <div id="classFilters" class="grid"></div>
+        </div>
+      </section>
+
+      <aside class="card">
+        <div style="display:flex; justify-content:space-between; align-items: center; margin-bottom:8px;">
+          <strong data-i18n-key="history-title">履歴</strong>
+          <span id="historyCount" class="muted">0 件</span>
+        </div>
+        <div id="history" class="history">
+          <div class="empty" data-i18n-key="history-empty">まだ結果がありません</div>
+        </div>
+      </aside>
+    </div>
+
+    <footer data-i18n-key="footer-text" data-i18n-target="innerHTML">
+      このツールは<a href="https://github.com/Yasaitachi/Splatoon3-WeaponRoulette" target="_blank" class="link">GitHub</a>にて無料で公開しています。
+    </footer>
+
+    <div id="settingsModal" class="modal-overlay" style="display: none;">
+      <div class="modal-content card">
+        <div class="modal-header">
+          <h2 data-i18n-key="settings-title">設定</h2>
+          <button id="closeSettingsBtn" class="btn icon secondary" data-i18n-aria-label="settings-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="setting-item">
+            <strong data-i18n-key="settings-theme">テーマ</strong>
+            <div class="setting-control">
+              <label class="chip"><input type="radio" name="theme" value="system"> <span data-i18n-key="theme-system">システム</span></label>
+              <label class="chip"><input type="radio" name="theme" value="light"> <span data-i18n-key="theme-light">ライト</span></label>
+              <label class="chip"><input type="radio" name="theme" value="dark"> <span data-i18n-key="theme-dark">ダーク</span></label>
+            </div>
+          </div>
+          <div class="setting-item">
+            <strong data-i18n-key="settings-language">言語</strong>
+            <div class="setting-control">
+              <label class="chip"><input type="radio" name="language" value="ja"> <span data-i18n-key="language-ja">日本語</span></label>
+              <label class="chip"><input type="radio" name="language" value="en"> <span data-i18n-key="language-en">English</span></label>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="Weapon-data.js"></script>
+  <script src="i18n.js"></script>
+  <script src="script.js" defer></script>
+</body>
+</html>
