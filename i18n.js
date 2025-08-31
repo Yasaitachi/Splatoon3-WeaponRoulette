@@ -14,6 +14,11 @@ const translations = {
     'room-share': 'リアルタイム共有中',
     'copy-room-url': '共有URLをコピー',
     'copy-room-url-success': 'URLをクリップボードにコピーしました！',
+    'lobby-title': 'ブキルーレットへようこそ！',
+    'lobby-desc': '友達とリアルタイムでルーレットを楽しむには、部屋を作成するか、既存の部屋に参加してください。',
+    'lobby-create-room': '新しい部屋を作る',
+    'lobby-join-placeholder': '部屋IDを入力...',
+    'lobby-join-room': '参加する',
     'chat-title': 'チャット',
 
     // Main Display
@@ -118,6 +123,11 @@ const translations = {
     'room-share': 'Real-time Sync Active',
     'copy-room-url': 'Copy Share URL',
     'copy-room-url-success': 'Copied the URL to clipboard!',
+    'lobby-title': 'Welcome to the Weapon Roulette!',
+    'lobby-desc': 'To enjoy the roulette in real-time with friends, create a new room or join an existing one.',
+    'lobby-create-room': 'Create a New Room',
+    'lobby-join-placeholder': 'Enter Room ID...',
+    'lobby-join-room': 'Join',
     'chat-title': 'Chat',
 
     // Main Display

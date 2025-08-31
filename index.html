@@ -8,94 +8,113 @@
 </head>
 <body>
   <div class="app">
-    <header>
-      <h1 data-i18n-key="app-title">スプラトゥーン3｜ブキルーレット</h1>
-      <div id="room-info" class="card" style="display: none; padding: 8px 12px; margin-left: auto; font-size: 14px; gap: 8px; align-items: center;">
-        <strong data-i18n-key="room-share">リアルタイム共有中</strong>
-        <div class="pill" style="padding: 4px 8px;">
-          <input type="text" id="roomUrl" readonly style="border:none; background:transparent; color: var(--text); width: 240px;">
-          <button id="copyRoomUrlBtn" class="btn icon secondary" data-i18n-title="copy-room-url" style="padding: 4px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
-        </div>
+    <!-- ▼▼▼ ロビー画面を追加 ▼▼▼ -->
+    <div id="lobby" class="card" style="text-align: center; padding: 40px; margin: 40px auto; max-width: 500px; display: none;">
+      <h2 data-i18n-key="lobby-title" style="margin-top: 0;">ブキルーレットへようこそ！</h2>
+      <p data-i18n-key="lobby-desc" class="muted" style="margin-bottom: 24px;">友達とリアルタイムでルーレットを楽しむには、部屋を作成するか、既存の部屋に参加してください。</p>
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <button id="createNewRoomBtn" class="btn" data-i18n-key="lobby-create-room">新しい部屋を作る</button>
+        <div class="controls-divider" style="width: auto; height: 1px; margin: 8px 0; background-color: var(--card-border);"></div>
+        <form id="joinRoomForm" style="display: flex; gap: 8px;">
+          <input type="text" id="joinRoomIdInput" class="input-text" data-i18n-placeholder="lobby-join-placeholder" placeholder="部屋IDを入力..." style="flex-grow: 1;">
+          <button type="submit" class="btn secondary" data-i18n-key="lobby-join-room">参加する</button>
+        </form>
       </div>
-    </header>
+    </div>
+    <!-- ▲▲▲ ロビー画面を追加 ▲▲▲ -->
 
-    <div class="main-controls card">
+    <!-- ▼▼▼ 既存のコンテンツをラップ ▼▼▼ -->
+    <div id="app-main" style="display: none;">
+      <header>
+        <h1 data-i18n-key="app-title">スプラトゥーン3｜ブキルーレット</h1>
+        <div id="room-info" class="card" style="display: none; padding: 8px 12px; margin-left: auto; font-size: 14px; gap: 8px; align-items: center;">
+          <strong data-i18n-key="room-share">リアルタイム共有中</strong>
+          <div class="pill" style="padding: 4px 8px;">
+            <input type="text" id="roomUrl" readonly style="border:none; background:transparent; color: var(--text); width: 240px;">
+            <button id="copyRoomUrlBtn" class="btn icon secondary" data-i18n-title="copy-room-url" style="padding: 4px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
+          </div>
+        </div>
+      </header>
 
-      <div class="pill">
-        <label for="playerCount" style="margin-right: 8px; cursor: pointer;" data-i18n-key="player-count">プレイヤー数</label>
-        <input id="playerCount" type="number" min="1" max="8" value="1">
+      <div class="main-controls card">
+
+        <div class="pill">
+          <label for="playerCount" style="margin-right: 8px; cursor: pointer;" data-i18n-key="player-count">プレイヤー数</label>
+          <input id="playerCount" type="number" min="1" max="8" value="1">
+        </div>
+        <button id="spinBtn" class="btn" data-i18n-aria-label="spin" data-i18n-key="spin">回す</button>
+        <label class="switch pill" data-i18n-title="no-repeat-title" title="有効にすると、一度出たブキは履歴をリセットするまで抽選対象から除外されます">
+          <input id="noRepeat" type="checkbox" />
+          <span data-i18n-key="no-repeat">重複なし</span>
+        </label>
+        <button id="resetBtn" class="btn danger" data-i18n-aria-label="reset" data-i18n-key="reset">リセット</button>
+        <div class="controls-divider"></div>
+        <button id="fullscreenBtn" class="btn secondary icon" data-i18n-title="fullscreen" data-i18n-aria-label="fullscreen-toggle">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+        </button>
+        <button id="settingsBtn" class="btn secondary icon" data-i18n-title="settings">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </button>
       </div>
-      <button id="spinBtn" class="btn" data-i18n-aria-label="spin" data-i18n-key="spin">回す</button>
-      <label class="switch pill" data-i18n-title="no-repeat-title" title="有効にすると、一度出たブキは履歴をリセットするまで抽選対象から除外されます">
-        <input id="noRepeat" type="checkbox" />
-        <span data-i18n-key="no-repeat">重複なし</span>
-      </label>
-      <button id="resetBtn" class="btn danger" data-i18n-aria-label="reset" data-i18n-key="reset">リセット</button>
-      <div class="controls-divider"></div>
-      <button id="fullscreenBtn" class="btn secondary icon" data-i18n-title="fullscreen" data-i18n-aria-label="fullscreen-toggle">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
-      </button>
-      <button id="settingsBtn" class="btn secondary icon" data-i18n-title="settings">
-        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-      </button>
+
+      <div class="layout">
+        <section class="card" aria-live="polite">
+          <div class="display">
+            <div id="resultContainer" class="result-container">
+              <div id="resultName" class="name" data-i18n-key="reset-display-name">準備OK</div>
+              <div id="resultDetails" class="details" data-i18n-key="reset-display-class">プレイヤー数を選択して「回す」を押してください</div>
+            </div>
+            <div class="ticker"></div>
+          </div>
+          <!-- ▼ここから追加：確率表 -->
+          <div class="card" style="margin-top:12px;">
+            <strong data-i18n-key="prob-title">各ブキの排出確率</strong>
+            <div id="probTableWrap" class="custom-scrollbar" style="max-height:220px;overflow:auto;margin-top:8px;">
+              <table id="probTable" style="width:100%;border-collapse:collapse;font-size:13px;">
+                <!-- 動的生成 -->
+              </table>
+            </div>
+          </div>
+          <!-- ▲ここまで追加 -->
+          <div class="card" style="margin-top:12px">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+              <strong data-i18n-key="filter-title">ブキ絞り込み</strong>
+            </div>
+            <div id="classFilters" class="grid custom-scrollbar"></div>
+          </div>
+        </section>
+
+        <aside class="card">
+          <div style="display:flex; justify-content:space-between; align-items: center; margin-bottom:8px;">
+            <strong data-i18n-key="history-title">履歴</strong>
+            <span id="historyCount" class="muted">0 件</span>
+          </div>
+          <div id="history" class="history custom-scrollbar">
+            <div class="empty" data-i18n-key="history-empty">まだ結果がありません</div>
+          </div>
+
+          <!-- ▼▼▼ チャット機能を追加 ▼▼▼ -->
+          <div class="card" style="margin-top: 16px; flex-grow: 1; display: flex; flex-direction: column;">
+            <strong data-i18n-key="chat-title">チャット</strong>
+            <div id="chat-messages" class="chat-messages custom-scrollbar" style="flex-grow: 1;">
+              <!-- メッセージは動的に生成 -->
+            </div>
+            <div id="typing-indicator" class="typing-indicator"></div>
+            <div class="chat-input-area">
+              <input type="text" id="chat-username" class="input-text" placeholder="名前" style="flex-basis: 100px; flex-grow: 0;">
+              <input type="text" id="chat-message-input" class="input-text" placeholder="メッセージを入力...">
+              <button id="chat-send-btn" class="btn icon secondary" title="送信"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></button>
+            </div>
+          </div>
+          <!-- ▲▲▲ チャット機能を追加 ▲▲▲ -->
+        </aside>
+      </div>
+
+      <footer data-i18n-key="footer-text" data-i18n-target="innerHTML">
+        このツールは<a href="https://github.com/Yasaitachi/Splatoon3-WeaponRoulette" target="_blank" class="link">GitHub</a>にて無料で公開しています。
+      </footer>
     </div>
-
-    <div class="layout">
-      <section class="card" aria-live="polite">
-        <div class="display">
-          <div id="resultContainer" class="result-container">
-            <div id="resultName" class="name" data-i18n-key="reset-display-name">準備OK</div>
-            <div id="resultDetails" class="details" data-i18n-key="reset-display-class">プレイヤー数を選択して「回す」を押してください</div>
-          </div>
-          <div class="ticker"></div>
-        </div>
-        <!-- ▼ここから追加：確率表 -->
-        <div class="card" style="margin-top:12px;">
-          <strong data-i18n-key="prob-title">各ブキの排出確率</strong>
-          <div id="probTableWrap" class="custom-scrollbar" style="max-height:220px;overflow:auto;margin-top:8px;">
-            <table id="probTable" style="width:100%;border-collapse:collapse;font-size:13px;">
-              <!-- 動的生成 -->
-            </table>
-          </div>
-        </div>
-        <!-- ▲ここまで追加 -->
-        <div class="card" style="margin-top:12px">
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
-            <strong data-i18n-key="filter-title">ブキ絞り込み</strong>
-          </div>
-          <div id="classFilters" class="grid custom-scrollbar"></div>
-        </div>
-      </section>
-
-      <aside class="card">
-        <div style="display:flex; justify-content:space-between; align-items: center; margin-bottom:8px;">
-          <strong data-i18n-key="history-title">履歴</strong>
-          <span id="historyCount" class="muted">0 件</span>
-        </div>
-        <div id="history" class="history custom-scrollbar">
-          <div class="empty" data-i18n-key="history-empty">まだ結果がありません</div>
-        </div>
-
-        <!-- ▼▼▼ チャット機能を追加 ▼▼▼ -->
-        <div class="card" style="margin-top: 16px; flex-grow: 1; display: flex; flex-direction: column;">
-          <strong data-i18n-key="chat-title">チャット</strong>
-          <div id="chat-messages" class="chat-messages custom-scrollbar" style="flex-grow: 1;">
-            <!-- メッセージは動的に生成 -->
-          </div>
-          <div id="typing-indicator" class="typing-indicator"></div>
-          <div class="chat-input-area">
-            <input type="text" id="chat-username" class="input-text" placeholder="名前" style="flex-basis: 100px; flex-grow: 0;">
-            <input type="text" id="chat-message-input" class="input-text" placeholder="メッセージを入力...">
-            <button id="chat-send-btn" class="btn icon secondary" title="送信"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></button>
-          </div>
-        </div>
-        <!-- ▲▲▲ チャット機能を追加 ▲▲▲ -->
-      </aside>
-    </div>
-
-    <footer data-i18n-key="footer-text" data-i18n-target="innerHTML">
-      このツールは<a href="https://github.com/Yasaitachi/Splatoon3-WeaponRoulette" target="_blank" class="link">GitHub</a>にて無料で公開しています。
-    </footer>
+    <!-- ▲▲▲ 既存のコンテンツをラップ ▲▲▲ -->
 
     <div id="settingsModal" class="modal-overlay" style="display: none;">
       <div class="modal-content card">

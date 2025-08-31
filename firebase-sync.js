@@ -3,15 +3,15 @@
 const firebaseSync = (() => {
   // --- Firebase Configuration ---
   // ここにステップ1でコピーしたFirebaseプロジェクトの構成情報を貼り付けます
-  const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    databaseURL: "https://YOUR_PROJECT_ID.firebaseio.com", // Realtime DatabaseのURL
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
-  };
+    const firebaseConfig = {
+        apiKey: "AIzaSyCasaRCxU26RD8Dvnzs4pT1uKgbX0MJgr8",
+        authDomain: "splatoon3-weponroulette.firebaseapp.com",
+        databaseURL: "https://splatoon3-weponroulette-default-rtdb.firebaseio.com",
+        projectId: "splatoon3-weponroulette",
+        storageBucket: "splatoon3-weponroulette.firebasestorage.app",
+        messagingSenderId: "198539626159",
+        appId: "1:198539626159:web:66631074abb597ab00f65a"
+    };
 
   let db;
   let roomRef;
@@ -49,11 +49,6 @@ const firebaseSync = (() => {
 
   const init = () => {
     try {
-      // apiKeyがプレースホルダーのままなら初期化しない
-      if (firebaseConfig.apiKey === "YOUR_API_KEY") {
-        console.warn("Firebase is not configured. Real-time sync is disabled.");
-        return;
-      }
       firebase.initializeApp(firebaseConfig);
       db = firebase.database();
       isInitialized = true;
