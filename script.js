@@ -16,6 +16,7 @@ const firebaseConfig = {
 // --- グローバル変数 ---------------------------------------------------------
 const APP_VERSION = '1.2.0'; // アプリケーションのバージョン。更新時にこの数値を変更する。
 const RESET_TIMEOUT_MS = 10000; // 10秒
+const ROOM_EXPIRATION_MS = 30 * 60 * 1000; // 30分
 const state = {
   running: false,
   resetTimer: null,
@@ -30,6 +31,7 @@ const state = {
   roomId: null,
   isHost: false,
   playerName: '',
+  activityTimer: null,
   lang: 'ja',
   theme: 'system',
 };
@@ -1154,6 +1156,7 @@ async function createRoom() { // UIの状態を更新して、処理中である
     state.roomRef = roomsRef.child(state.roomId);
     await state.roomRef.set({
       createdAt: firebase.database.ServerValue.TIMESTAMP,
+      lastActivity: firebase.database.ServerValue.TIMESTAMP,
       lastSpin: null
     });
 
@@ -1212,6 +1215,16 @@ async function joinRoom() {
       return;
     }
 
+    const roomData = snapshot.val();
+    // Check for room expiration
+    if (roomData.lastActivity && (Date.now() - roomData.lastActivity > ROOM_EXPIRATION_MS)) {
+        alert(t('realtime-error-expired'));
+        reEnableButtons();
+        // Optionally, we could delete the room here, but it requires different permissions.
+        // For now, just prevent joining.
+        return;
+    }
+
     // Check if banned by IP
     const bannedIPsSnapshot = await state.roomRef.child('bannedIPs').once('value');
     const bannedIPs = Object.values(bannedIPsSnapshot.val() || {});
@@ -1246,8 +1259,33 @@ async function joinRoom() {
   }
 }
 
+function startActivityHeartbeat() {
+  if (state.activityTimer) {
+    clearInterval(state.activityTimer);
+  }
+  const update = () => {
+    if (state.roomRef) {
+      state.roomRef.child('lastActivity').set(firebase.database.ServerValue.TIMESTAMP)
+        .catch(err => console.error("Failed to update room activity:", err));
+    }
+  };
+  update(); // Update once immediately
+  // Keep the room alive by updating the timestamp every 5 minutes
+  state.activityTimer = setInterval(update, 5 * 60 * 1000);
+}
+
+function stopActivityHeartbeat() {
+  if (state.activityTimer) {
+    clearInterval(state.activityTimer);
+    state.activityTimer = null;
+  }
+}
+
 function listenToRoomChanges() {
   if (!state.roomRef) return;
+
+  // Start sending heartbeats to keep the room alive
+  startActivityHeartbeat();
 
   // 自分への通知（キック、BANなど）をリッスン
   const notificationRef = state.roomRef.child('notifications').child(state.playerRef.key);
@@ -1425,6 +1463,9 @@ function handleLeaveRoom(removeFromDb = true) {
   if (state.roomRef) {
     state.roomRef.off(); // 全てのリスナーを解除
   }
+
+  // Stop sending heartbeats
+  stopActivityHeartbeat();
 
   state.roomRef = null;
   state.playerRef = null;

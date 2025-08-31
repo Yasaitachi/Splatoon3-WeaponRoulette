@@ -407,17 +407,28 @@ input:checked + .slider:before {
 .chat-message {
   font-size: 14px;
   line-height: 1.4;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
 }
 .chat-message.system {
   color: var(--muted);
   font-style: italic;
   text-align: center;
   font-size: 12px;
+  display: block; /* flexを上書きして中央揃えを維持 */
 }
 .chat-message strong {
-  margin-right: 6px;
+  margin-right: 0;
   color: var(--accent);
 }
+.chat-timestamp {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
 .chat-input-area {
   display: flex;
   gap: 8px;

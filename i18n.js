@@ -71,9 +71,9 @@ const translations = {
     'chat-send-btn': '送信',
 
     // System Messages
-    'system-new-host': '{name}さんが新しいホストになりました。',
-    'system-player-joined': '{name}さんが参加しました。',
-    'system-player-left': '{name}さんが退出しました。',
+    'system-new-host': '[サーバー] {name}さんが新しいホストになりました。',
+    'system-player-joined': '[サーバー] {name}さんが参加しました。',
+    'system-player-left': '[サーバー] {name}さんが退出しました。',
 
     // Probability Table
     'prob-title': '各ブキの排出確率',
@@ -204,9 +204,9 @@ const translations = {
     'chat-send-btn': 'Send',
 
     // System Messages
-    'system-new-host': '{name} is the new host.',
-    'system-player-joined': '{name} has joined.',
-    'system-player-left': '{name} has left.',
+    'system-new-host': '[Server] {name} is the new host.',
+    'system-player-joined': '[Server] {name} has joined.',
+    'system-player-left': '[Server] {name} has left.',
 
     // Probability Table
     'prob-title': 'Probability of each weapon',
