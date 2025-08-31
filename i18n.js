@@ -2,10 +2,15 @@ const translations = {
   ja: {
     // Realtime
     'realtime-title': 'リアルタイム連携',
-    'realtime-join-placeholder': '12桁のルームID',
+    'realtime-player-name-placeholder': 'オンラインプレイで表示される名前',
+    'realtime-join-placeholder': '12桁のルームID', // 修正済み
     'realtime-join-btn': '参加',
+    'realtime-joining-btn': '参加中...',
     'realtime-leave-btn': '退出する',
     'realtime-create-btn': 'ルーム作成',
+    'realtime-creating-btn': '作成中...',
+    'realtime-error-create': 'ルームの作成に失敗しました。ネットワーク接続などを確認してください。',
+    'realtime-error-join': 'ルームへの参加に失敗しました。ネットワーク接続などを確認してください。',
     'realtime-room-id': 'ルームID:',
     'realtime-host': 'ホスト',
     'realtime-error-connect': 'ルームに接続できませんでした。IDが正しいか確認してください。',
@@ -127,10 +132,15 @@ const translations = {
   en: {
     // Realtime
     'realtime-title': 'Real-time Sync',
-    'realtime-join-placeholder': '12-digit Room ID',
+    'realtime-player-name-placeholder': 'Name used for online play',
+    'realtime-join-placeholder': '12-digit Room ID', // Corrected
     'realtime-join-btn': 'Join',
+    'realtime-joining-btn': 'Joining...',
     'realtime-leave-btn': 'Leave Room',
     'realtime-create-btn': 'Create Room',
+    'realtime-creating-btn': 'Creating...',
+    'realtime-error-create': 'Failed to create room. Please check your network connection.',
+    'realtime-error-join': 'Failed to join room. Please check your network connection.',
     'realtime-room-id': 'Room ID:',
     'realtime-host': 'Host',
     'realtime-error-connect': 'Could not connect to the room. Please check the ID and try again.',

@@ -999,69 +999,107 @@ function initFirebase() {
   }
 }
 
-async function createRoom() {
+async function createRoom() { // UIの状態を更新して、処理中であることをユーザーにフィードバック
+  createRoomBtn.disabled = true;
+  joinRoomBtn.disabled = true;
+  createRoomBtn.textContent = t('realtime-creating-btn');
+
+  const reEnableButtons = () => {
+    createRoomBtn.disabled = false;
+    joinRoomBtn.disabled = false;
+    createRoomBtn.textContent = t('realtime-create-btn');
+  };
+
   const name = playerNameInput.value.trim();
   if (!name) {
     alert(t('player-name-required'));
+    reEnableButtons();
     return;
   }
   state.playerName = name;
 
-  const roomsRef = state.db.ref('rooms');
-  let newRoomId;
-  let roomExists = true;
+  try {
+    const roomsRef = state.db.ref('rooms');
+    let newRoomId;
+    let roomExists = true;
 
-  // 衝突しない12桁の数字のIDを生成する
-  while (roomExists) {
-    newRoomId = Math.floor(100000000000 + Math.random() * 900000000000).toString();
-    const snapshot = await roomsRef.child(newRoomId).once('value');
-    roomExists = snapshot.exists();
+    // 衝突しない12桁の数字のIDを生成する
+    while (roomExists) {
+      newRoomId = Math.floor(100000000000 + Math.random() * 900000000000).toString();
+      const snapshot = await roomsRef.child(newRoomId).once('value');
+      roomExists = snapshot.exists();
+    }
+
+    state.roomId = newRoomId;
+    state.roomRef = roomsRef.child(state.roomId);
+    await state.roomRef.set({
+      createdAt: firebase.database.ServerValue.TIMESTAMP,
+      lastSpin: null
+    });
+
+    state.playerRef = state.roomRef.child('clients').push({
+      name: state.playerName,
+      joinedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+    state.playerRef.onDisconnect().remove();
+
+    listenToRoomChanges();
+    // ルーム作成時に現在のフィルター状態を書き込む
+    updateFiltersOnFirebase();
+  } catch (error) {
+    console.error("Error creating room:", error);
+    alert(t('realtime-error-create'));
+    reEnableButtons();
   }
-
-  state.roomId = newRoomId;
-  state.roomRef = roomsRef.child(state.roomId);
-  await state.roomRef.set({
-    createdAt: firebase.database.ServerValue.TIMESTAMP,
-    lastSpin: null
-  });
-
-  state.playerRef = state.roomRef.child('clients').push({
-    name: state.playerName,
-    joinedAt: firebase.database.ServerValue.TIMESTAMP
-  });
-  state.playerRef.onDisconnect().remove();
-
-  listenToRoomChanges();
-  // ルーム作成時に現在のフィルター状態を書き込む
-  updateFiltersOnFirebase();
 }
 
 async function joinRoom() {
+  createRoomBtn.disabled = true;
+  joinRoomBtn.disabled = true;
+  joinRoomBtn.textContent = t('realtime-joining-btn');
+
+  const reEnableButtons = () => {
+      createRoomBtn.disabled = false;
+      joinRoomBtn.disabled = false;
+      joinRoomBtn.textContent = t('realtime-join-btn');
+  };
+
   const name = playerNameInput.value.trim();
   if (!name) {
     alert(t('player-name-required'));
+    reEnableButtons();
     return;
   }
   const roomId = roomIdInput.value.trim();
-  if (!roomId) return;
+  if (!roomId) {
+    reEnableButtons();
+    return;
+  }
 
   state.playerName = name;
   state.roomId = roomId;
   state.roomRef = state.db.ref(`rooms/${state.roomId}`);
 
-  const snapshot = await state.roomRef.once('value');
-  if (!snapshot.exists()) {
-    alert(t('realtime-error-connect'));
-    return;
+  try {
+    const snapshot = await state.roomRef.once('value');
+    if (!snapshot.exists()) {
+      alert(t('realtime-error-connect'));
+      reEnableButtons();
+      return;
+    }
+
+    state.playerRef = state.roomRef.child('clients').push({
+      name: state.playerName,
+      joinedAt: firebase.database.ServerValue.TIMESTAMP
+    });
+    state.playerRef.onDisconnect().remove();
+
+    listenToRoomChanges();
+  } catch (error) {
+    console.error("Error joining room:", error);
+    alert(t('realtime-error-join'));
+    reEnableButtons();
   }
-
-  state.playerRef = state.roomRef.child('clients').push({
-    name: state.playerName,
-    joinedAt: firebase.database.ServerValue.TIMESTAMP
-  });
-  state.playerRef.onDisconnect().remove();
-
-  listenToRoomChanges();
 }
 
 function listenToRoomChanges() {
