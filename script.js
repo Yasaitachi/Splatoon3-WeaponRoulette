@@ -1,5 +1,6 @@
 // --- グローバル変数 ---------------------------------------------------------
 
+const APP_VERSION = '1.1.2'; // アプリケーションのバージョン。更新時にこの数値を変更する。
 const RESET_TIMEOUT_MS = 10000; // 10秒
 const state = {
   running: false,
@@ -91,7 +92,7 @@ function pushHistoryItem(weapon, batchTime, playerNum, totalPlayers) {
 function renderHistory() {
   const totalItems = state.history.length;
   const batchIds = new Set(state.history.map(h => h.time));
-  historyCount.textContent = `${batchIds.size}回 (${totalItems}ブキ)`;
+  historyCount.textContent = t('history-count-value', { batches: batchIds.size, total: totalItems });
 
   if (!totalItems) {
     historyEl.innerHTML = `<div class="empty" data-i18n-key="history-empty">${t('history-empty')}</div>`;
@@ -109,13 +110,12 @@ function renderHistory() {
 
     return `
       <div class="history-item ${batchClass}">
-        <div style="flex-grow: 1;">
+        <div class="history-item__main">
           <div class="history-weapon-name">${playerLabel}${getWeaponName(h)}</div>
-          <div class="history-weapon-details muted">${t(h.sub)} / ${t(h.sp)}</div>
+          <div class="history-weapon-details muted">${t(h.class)} / ${t(h.sub)} / ${t(h.sp)}</div>
         </div>
-        <div style="display:flex; gap: 6px; align-items:center;">
-          <div class="muted" style="text-align:right; font-size: 11px; line-height: 1.3;">
-            <div>${t(h.class)}</div>
+        <div class="history-item__aside">
+          <div class="history-item__meta muted">
             <div>${time.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
           </div>
           <button class="btn secondary icon" data-delete-index="${index}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>
@@ -258,6 +258,10 @@ async function performDraw() {
 
   if (finalResults.length > 0) {
     saveHistory(); // すべての抽選が終わった後に履歴を保存
+
+    // Discord Webhookで送信
+    await sendToDiscord(finalResults);
+
     // 抽選が成功した場合にのみ、リセットタイマーを設定
     showFinalResult.resetTimer = setTimeout(() => {
       resultContainer.innerHTML = `
@@ -338,9 +342,102 @@ async function showFinalResult(results) {
       const resultItem = listEl.children[i];
       const nameEl = resultItem.querySelector('.weapon-name');
       const subSpEl = resultItem.querySelector('.weapon-sub-sp');
-      nameEl.textContent = getWeaponName(results[i]);
-      subSpEl.textContent = `${t(results[i].sub)} / ${t(results[i].sp)}`;
+      const w = results[i];
+      nameEl.textContent = getWeaponName(w);
+      subSpEl.textContent = `${t(w.class)} / ${t(w.sub)} / ${t(w.sp)}`;
     }
+  }
+}
+
+/**
+ * 抽選結果をDiscord Webhookに送信する
+ * @param {Array<Object>} results - 抽選結果のブキオブジェクトの配列
+ */
+async function sendToDiscord(results) {
+  const webhookEnable = $('#webhookEnable');
+  const webhookUrl = $('#webhookUrl');
+  if (!webhookEnable?.checked || !webhookUrl?.value) {
+    return;
+  }
+
+  const url = webhookUrl.value;
+  const template = $('#webhookTemplate')?.value;
+  const playerCount = results.length;
+  const mentionIds = ($('#webhookMentions')?.value ?? '').split(',').map(id => id.trim()).filter(id => id);
+  const mentionContent = mentionIds.map(id => `<@${id}>`).join(' ');
+
+  let payload;
+
+  if (playerCount > 1) {
+    // 複数人の場合：1人1つのEmbedを作成
+    const embeds = results.map((w, i) => {
+      const playerIdentifier = t('player-result-list', { i: i + 1 });
+      const embed = {
+        author: {
+          name: `${playerIdentifier}: ${getWeaponName(w)}`,
+        },
+        description: `${t(w.class)} / ${t(w.sub)} / ${t(w.sp)}`,
+        color: 0xef5350,
+      };
+
+      // 最後のEmbedにだけタイムスタンプとフッターを追加
+      if (i === results.length - 1) {
+        embed.timestamp = new Date().toISOString();
+        embed.footer = { text: 'Splatoon 3 Weapon Roulette' };
+      }
+      return embed;
+    });
+
+    payload = {
+      content: mentionContent,
+      embeds: embeds,
+    };
+  } else {
+    // 1人の場合：これまで通りの単一Embed
+    let description = '';
+    const w = results[0];
+    if (template) {
+      const weaponList = `${getWeaponName(w)} (${t(w.class)} / ${t(w.sub)} / ${t(w.sp)})`;
+      description = template
+        .replace('{playerCount}', 1)
+        .replace('{weaponList}', weaponList);
+    }
+
+    const embed = {
+      title: t('webhook-result-title', { playerCount }),
+      description: description,
+      color: 0xef5350,
+      fields: results.map(w => ({
+        name: getWeaponName(w),
+        value: `${t(w.class)} / ${t(w.sub)} / ${t(w.sp)}`,
+      })),
+      timestamp: new Date().toISOString(),
+      footer: {
+        text: 'Splatoon 3 Weapon Roulette',
+      },
+    };
+    payload = {
+      content: mentionContent,
+      embeds: [embed],
+    };
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      console.error('Discord Webhookへの送信に失敗しました:', response.status, await response.text());
+      alert(t('webhook-send-error'));
+    }
+  } catch (error) {
+    console.error('Discord Webhookへの送信中にエラーが発生しました:', error);
+    alert(t('webhook-send-error'));
   }
 }
 
@@ -370,7 +467,7 @@ function renderProbTable() {
   const pool = state.pool;
   if (!probTable) return;
   if (!pool.length) {
-    probTable.innerHTML = `<tr><td class="muted" style="padding:8px;" data-i18n-key="prob-no-candidates">${t('prob-no-candidates')}</td></tr>`;
+    probTable.innerHTML = `<tr><td class="muted prob-table-empty" data-i18n-key="prob-no-candidates">${t('prob-no-candidates')}</td></tr>`;
     return;
   }
   const prob = 100 / pool.length;
@@ -430,6 +527,10 @@ function saveSettings() {
       playerCount: playerCountInput.value,
       lang: state.lang,
       theme: state.theme,
+      webhookEnabled: $('#webhookEnable')?.checked ?? false,
+      webhookUrl: $('#webhookUrl')?.value ?? '',
+      webhookTemplate: $('#webhookTemplate')?.value ?? '',
+      webhookMentions: $('#webhookMentions')?.value ?? '',
     };
     localStorage.setItem('splaRouletteSettings', JSON.stringify(settings));
   } catch (e) {
@@ -449,6 +550,23 @@ function loadAndApplySettings() {
     playerCountInput.value = settings.playerCount ?? 1;
     setLanguage(settings.lang || navigator.language.startsWith('ja') ? 'ja' : 'en');
     applyTheme(settings.theme || 'system');
+    const webhookEnable = $('#webhookEnable');
+    const webhookUrl = $('#webhookUrl');
+    if (webhookEnable) {
+      webhookEnable.checked = settings.webhookEnabled ?? false;
+    }
+    if (webhookUrl) {
+      webhookUrl.value = settings.webhookUrl ?? '';
+    }
+    const webhookTemplate = $('#webhookTemplate');
+    if (webhookTemplate) {
+      webhookTemplate.value = settings.webhookTemplate ?? '';
+    }
+    const webhookMentions = $('#webhookMentions');
+    if (webhookMentions) {
+      webhookMentions.value = settings.webhookMentions ?? '';
+    }
+    toggleWebhookUrlState(); // Webhook設定のUI状態を更新
   } catch (e) {
     console.error("Failed to load settings:", e);
     localStorage.removeItem('splaRouletteSettings');
@@ -500,6 +618,9 @@ function updateUIText() {
   document.querySelectorAll('[data-i18n-aria-label]').forEach(el => {
     el.setAttribute('aria-label', t(el.dataset.i18nArialabel));
   });
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+    el.placeholder = t(el.dataset.i18nPlaceholder);
+  });
 
   // 動的に生成されるUIのテキストも更新
   updateProbText();
@@ -538,6 +659,105 @@ function handleSystemThemeChange(e) {
   if (state.theme === 'system') {
     document.documentElement.dataset.theme = e.matches ? 'dark' : 'light';
   }
+}
+
+/**
+ * Webhook設定の有効/無効に応じて、URL入力欄とテストボタンの状態を切り替える
+ */
+function toggleWebhookUrlState() {
+  const enabled = $('#webhookEnable')?.checked ?? false;
+  const container = $('#webhookUrlContainer');
+  if (!container) return;
+
+  // 有効/無効に応じて見た目と操作可否を変更
+  container.style.opacity = enabled ? '1' : '0.5';
+  container.style.pointerEvents = enabled ? 'auto' : 'none';
+
+  const urlInput = $('#webhookUrl');
+  const testBtn = $('#testWebhookBtn');
+  if (urlInput) urlInput.disabled = !enabled;
+  if (testBtn) testBtn.disabled = !enabled;
+}
+
+/**
+ * Discord Webhookの送信テストを行う
+ */
+async function testDiscordWebhook() {
+  const webhookUrlInput = $('#webhookUrl');
+  const testBtn = $('#testWebhookBtn');
+  const url = webhookUrlInput.value;
+  const mentionIds = ($('#webhookMentions')?.value ?? '').split(',').map(id => id.trim()).filter(id => id);
+  const mentionContent = mentionIds.length > 0 ? mentionIds.map(id => `<@${id}>`).join(' ') : '';
+
+  if (!url) {
+    alert(t('settings-webhook-test-no-url'));
+    return;
+  }
+
+  testBtn.disabled = true;
+  const originalText = testBtn.textContent;
+  testBtn.textContent = t('settings-webhook-test-sending');
+
+  const embed = {
+    title: '✅ 接続テスト',
+    description: 'このメッセージが表示されれば、Webhookの設定は正常です！',
+    color: 0x4caf50, // Green
+    footer: { text: 'Splatoon 3 Weapon Roulette' },
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ content: `${t('webhook-test-content')} ${mentionContent}`, embeds: [embed] }),
+    });
+    alert(response.ok ? t('settings-webhook-test-success') : t('settings-webhook-test-fail'));
+  } catch (error) {
+    alert(t('settings-webhook-test-fail'));
+  } finally {
+    testBtn.disabled = false;
+    testBtn.textContent = originalText;
+  }
+}
+
+function buildWebhookSettingsUI() {
+  const modalBody = settingsModal?.querySelector('.modal-body');
+  if (!modalBody) {
+    console.warn('Settings modal body not found, skipping Webhook UI creation.');
+    return;
+  }
+
+  const webhookSection = document.createElement('div');
+  webhookSection.className = 'settings-section';
+  webhookSection.innerHTML = `
+    <h3 data-i18n-key="settings-webhook-title">Discord Webhook連携</h3>
+    <p class="muted" data-i18n-key="settings-webhook-desc">抽選結果をDiscordチャンネルに自動で送信します。</p>
+    <div class="setting-item row">
+      <label for="webhookEnable" data-i18n-key="settings-webhook-enable">Webhookを有効にする</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="webhookEnable">
+        <span class="slider"></span>
+      </label>
+    </div>
+    <div id="webhookUrlContainer">
+      <div class="setting-item">
+        <label for="webhookUrl" data-i18n-key="settings-webhook-url">Webhook URL</label>
+        <input type="url" id="webhookUrl" placeholder="https://discord.com/api/webhooks/..." class="input-text">
+      </div>
+      <div class="setting-item">
+        <label for="webhookTemplate" data-i18n-key="settings-webhook-template">カスタムメッセージ</label>
+        <textarea id="webhookTemplate" class="input-text" rows="3" data-i18n-placeholder="settings-webhook-template-placeholder"></textarea>
+        <p class="muted small" data-i18n-key="settings-webhook-template-help" data-i18n-target="innerHTML"></p>
+      </div>
+      <div class="setting-item">
+        <label for="webhookMentions" data-i18n-key="settings-webhook-mentions"></label>
+        <input type="text" id="webhookMentions" class="input-text" data-i18n-placeholder="settings-webhook-mentions-placeholder">
+        <p class="muted small" data-i18n-key="settings-webhook-mentions-help"></p>
+      </div>
+      <button type="button" id="testWebhookBtn" class="btn secondary" data-i18n-key="settings-webhook-test-send">送信テスト</button>
+    </div>
+  `;
+  modalBody.appendChild(webhookSection);
 }
 
 // --- 初期化とイベントリスナー設定 ------------------------------------
@@ -595,6 +815,16 @@ function setupEventListeners() {
   $$('input[name="theme"]').forEach(radio => radio.addEventListener('change', (e) => applyTheme(e.target.value)));
   $$('input[name="language"]').forEach(radio => radio.addEventListener('change', (e) => setLanguage(e.target.value)));
 
+  // Webhook設定の変更を保存
+  $('#webhookEnable')?.addEventListener('change', () => {
+    toggleWebhookUrlState();
+    saveSettings();
+  });
+  $('#webhookUrl')?.addEventListener('input', saveSettings);
+  $('#webhookTemplate')?.addEventListener('input', saveSettings);
+  $('#webhookMentions')?.addEventListener('input', saveSettings);
+  $('#testWebhookBtn')?.addEventListener('click', testDiscordWebhook);
+
   systemThemeListener.addEventListener('change', handleSystemThemeChange);
 
   historyEl.addEventListener('click', e => {
@@ -644,6 +874,22 @@ function setupEventListeners() {
 }
 
 function init() {
+  // --- バージョンチェックと強制リロード ---
+  // ローカルに保存されたバージョンと現在のアプリバージョンを比較
+  const savedVersion = localStorage.getItem('splaRouletteVersion');
+  if (savedVersion && savedVersion !== APP_VERSION) {
+    // バージョンが異なる場合、互換性のない変更によるエラーを防ぐため、
+    // 古い設定と履歴をクリアしてページを強制的にリロードする。
+    console.log(`App updated from ${savedVersion} to ${APP_VERSION}. Clearing data and reloading.`);
+    localStorage.removeItem('splaRouletteSettings');
+    localStorage.removeItem('splaRouletteHistory');
+    localStorage.setItem('splaRouletteVersion', APP_VERSION); // 新しいバージョンを保存
+    location.reload(true); // キャッシュを無視してリロード
+    return; // リロードするため、以降の初期化処理は中断
+  }
+  // 現在のバージョンをローカルストレージに保存
+  localStorage.setItem('splaRouletteVersion', APP_VERSION);
+
   // `weapons`変数は`weapons.js`からグローバルスコープに読み込まれている
   if (typeof weapons === 'undefined' || weapons.length === 0) {
     console.error('ブキデータが見つかりません。weapons.jsが正しく読み込まれているか確認してください。');
@@ -657,6 +903,7 @@ function init() {
   }
 
   buildFilterUI();
+  buildWebhookSettingsUI();
   loadAndApplySettings();
   loadHistory();
   updatePool();

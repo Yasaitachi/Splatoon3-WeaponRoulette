@@ -1,6 +1,7 @@
 :root, html[data-theme="dark"] {
   --bg: #0b1020;
   --panel: #141a33;
+  --panel-rgb: 20, 26, 51;
   --accent: #7cf3d2;
   --accent-2: #b07cf3;
   --text: #e9f0ff;
@@ -23,6 +24,7 @@
 html[data-theme="light"] {
   --bg: #f0f2f8;
   --panel: #ffffff;
+  --panel-rgb: 255, 255, 255;
   --accent: #007bff;
   --accent-2: #6f42c1;
   --text: #212529;
@@ -244,17 +246,21 @@ a.link { color: var(--accent); text-decoration: none; border-bottom:1px dotted v
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.6);
+  background-color: rgba(0, 0, 0, 0.4);
   display: flex;
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 .modal-content {
   width: min(500px, 90vw);
   max-height: 90vh;
   display: flex;
   flex-direction: column;
+  /* 背景を30%透過させ、ガラスのような効果を出す */
+  background: rgba(var(--panel-rgb), 0.7);
 }
 .modal-header {
   display: flex;
@@ -274,5 +280,87 @@ a.link { color: var(--accent); text-decoration: none; border-bottom:1px dotted v
   flex-direction: column;
   gap: 20px;
 }
-.setting-item { display: flex; flex-direction: column; gap: 10px; }
+.modal-body .setting-item {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .setting-control { display: flex; flex-wrap: wrap; gap: 10px; }
+.modal-body .setting-item.row {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.modal-body .setting-item.row > label:first-child {
+  font-weight: 600;
+}
+.input-text {
+  width: 100%;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--secondary-btn-border);
+  background-color: var(--chip-bg);
+  color: var(--text);
+  font-size: 14px;
+}
+textarea.input-text {
+  font-family: inherit;
+  resize: vertical;
+}
+
+/* Toggle Switch */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 28px;
+}
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--chip-bg);
+  border: 1px solid var(--chip-border);
+  transition: .4s;
+  border-radius: 34px;
+}
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 20px;
+  width: 20px;
+  left: 4px;
+  bottom: 3px;
+  background-color: var(--muted);
+  transition: .4s;
+  border-radius: 50%;
+}
+input:checked + .slider {
+  background-color: var(--accent);
+  border-color: var(--accent);
+}
+input:checked + .slider:before {
+  transform: translateX(21px);
+  background-color: var(--btn-text);
+}
+
+/* Webhook設定のインデント */
+#webhookUrlContainer {
+  transition: opacity 0.2s ease-in-out;
+  padding-left: 1rem;
+  border-left: 2px solid var(--card-border);
+  margin-left: 0.5rem;
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
