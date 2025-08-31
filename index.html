@@ -15,12 +15,14 @@
           <strong data-i18n-key="realtime-title"></strong>
           <input type="text" id="playerNameInput" class="input-text" data-i18n-placeholder="realtime-player-name-placeholder" maxlength="20">
           <input type="text" id="roomIdInput" class="input-text" data-i18n-placeholder="realtime-join-placeholder" maxlength="12" pattern="[0-9]*" inputmode="numeric">
+          <input type="password" id="roomPasswordInput" class="input-text" data-i18n-placeholder="realtime-password-placeholder" style="width: 160px;" maxlength="30">
           <button id="joinRoomBtn" class="btn secondary" data-i18n-key="realtime-join-btn"></button>
           <span class="muted" style="margin: 0 4px;">or</span>
           <button id="createRoomBtn" class="btn secondary" data-i18n-key="realtime-create-btn"></button>
         </div>
         <div id="room-info-ui" style="display: none;">
           <span data-i18n-key="realtime-room-id"></span> <code id="roomIdDisplay"></code>
+          <span id="password-lock-icon" class="pill" style="display:none; padding: 2px 8px; font-size: 12px;" data-i18n-title="realtime-room-locked">🔒</span>
           <span id="host-badge" class="pill" style="display:none;" data-i18n-key="realtime-host"></span>
           <button id="leaveRoomBtn" class="btn danger" data-i18n-key="realtime-leave-btn" style="padding: 4px 10px; font-size: 13px;">退出</button>
         </div>

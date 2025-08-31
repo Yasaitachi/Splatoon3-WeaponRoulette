@@ -55,6 +55,7 @@ const createRoomBtn = $('#createRoomBtn');
 const joinRoomBtn = $('#joinRoomBtn');
 const leaveRoomBtn = $('#leaveRoomBtn');
 const roomIdInput = $('#roomIdInput');
+const roomPasswordInput = $('#roomPasswordInput');
 const roomJoinUi = $('#room-join-ui');
 const roomInfoUi = $('#room-info-ui');
 const roomIdDisplay = $('#roomIdDisplay');
@@ -1020,17 +1021,20 @@ function updateMyTypingStatus(isTyping) {
 /**
  * 現在のフィルター設定をFirebaseに保存する（ホスト専用）
  */
-function updateFiltersOnFirebase() {
+function updateRoomSettingsOnFirebase() {
   if (!state.isHost || !state.roomRef) return;
 
-  const filters = {
-    class: $$('input[data-class]').reduce((acc, cb) => ({ ...acc, [cb.dataset.class]: cb.checked }), {}),
-    sub: $$('input[data-sub]').reduce((acc, cb) => ({ ...acc, [cb.dataset.sub]: cb.checked }), {}),
-    sp: $$('input[data-sp]').reduce((acc, cb) => ({ ...acc, [cb.dataset.sp]: cb.checked }), {}),
-    noRepeat: noRepeat.checked,
+  const settings = {
+    filters: {
+      class: $$('input[data-class]').reduce((acc, cb) => ({ ...acc, [cb.dataset.class]: cb.checked }), {}),
+      sub: $$('input[data-sub]').reduce((acc, cb) => ({ ...acc, [cb.dataset.sub]: cb.checked }), {}),
+      sp: $$('input[data-sp]').reduce((acc, cb) => ({ ...acc, [cb.dataset.sp]: cb.checked }), {}),
+      noRepeat: noRepeat.checked,
+    },
+    playerCount: parseInt(playerCountInput.value, 10),
   };
 
-  state.roomRef.child('filters').set(filters);
+  state.roomRef.child('settings').set(settings);
 }
 
 /**
@@ -1038,7 +1042,7 @@ function updateFiltersOnFirebase() {
  * @param {Object} filters - Firebaseから取得したフィルター設定
  */
 function applyFiltersFromFirebase(filters) {
-  if (!filters || state.isHost) return;
+  if (!filters) return;
 
   // 各フィルターのチェックボックスの状態を更新
   if (filters.class) {
@@ -1058,7 +1062,21 @@ function applyFiltersFromFirebase(filters) {
   }
 
   if (filters.noRepeat !== undefined) noRepeat.checked = filters.noRepeat;
+}
 
+/**
+ * Firebaseから取得した設定をUIに適用する（視聴者専用）
+ * @param {Object} settings - Firebaseから取得した設定
+ */
+function applySettingsFromFirebase(settings) {
+  if (!settings || state.isHost) return;
+
+  if (settings.filters) {
+    applyFiltersFromFirebase(settings.filters);
+  }
+  if (settings.playerCount !== undefined) {
+    playerCountInput.value = settings.playerCount;
+  }
   updatePool();
 }
 
@@ -1168,7 +1186,8 @@ async function createRoom() { // UIの状態を更新して、処理中である
     createRoomBtn.textContent = t('realtime-create-btn');
   };
 
-  const name = playerNameInput.value.trim();
+    const name = playerNameInput.value.trim();
+    const password = roomPasswordInput.value.trim();
   if (!name) {
     alert(t('player-name-required'));
     reEnableButtons();
@@ -1184,7 +1203,7 @@ async function createRoom() { // UIの状態を更新して、処理中である
 
     // 衝突しない12桁の数字のIDを生成する
     while (roomExists) {
-      newRoomId = Math.floor(100000000000 + Math.random() * 900000000000).toString();
+      newRoomId = Math.floor(100000000000 + Math.random() * 999999999999).toString();
       const snapshot = await roomsRef.child(newRoomId).once('value');
       roomExists = snapshot.exists();
     }
@@ -1193,7 +1212,9 @@ async function createRoom() { // UIの状態を更新して、処理中である
     state.roomRef = roomsRef.child(state.roomId);
     await state.roomRef.set({
       createdAt: firebase.database.ServerValue.TIMESTAMP,
-      lastSpin: null
+      lastSpin: null,
+      hasPassword: !!password,
+      password: password || null,
     });
 
     state.playerRef = state.roomRef.child('clients').push({
@@ -1206,7 +1227,7 @@ async function createRoom() { // UIの状態を更新して、処理中である
 
     listenToRoomChanges();
     // ルーム作成時に現在のフィルター状態を書き込む
-    updateFiltersOnFirebase();
+    updateRoomSettingsOnFirebase();
   } catch (error) {
     console.error("Error creating room:", error);
     const detail = error.code ? `(${error.code})` : `(${error.message})`;
@@ -1247,6 +1268,13 @@ async function joinRoom() {
     const snapshot = await state.roomRef.once('value');
     if (!snapshot.exists()) {
       alert(t('realtime-error-connect'));
+      reEnableButtons();
+      return;
+    }
+
+    const roomData = snapshot.val();
+    if (roomData.hasPassword && roomData.password !== password) {
+      alert(t('realtime-error-password'));
       reEnableButtons();
       return;
     }
@@ -1316,17 +1344,44 @@ function listenToRoomChanges() {
 
     const me = playerArray.find(p => p.id === state.playerRef?.key);
     if (me) {
-      const wasHost = state.isHost;
-      state.isHost = me.isHost;
-      if (state.isHost && !wasHost && playerArray.length > 1) {
-        state.roomRef.child('chat').push({
-          name: null,
-          message: t('system-new-host', { name: me.name }),
-          isSystem: true,
-          timestamp: firebase.database.ServerValue.TIMESTAMP
+      const wasHost = state.isHost; // 以前のホスト状態を保存
+      const isNowHost = me.isHost;   // 現在のホスト状態
+
+      // 新しくホストになった場合の処理
+      if (isNowHost && !wasHost) {
+        // Firebaseに保存されている最新の設定を自分のUIに一度だけ適用する
+        state.roomRef.child('settings').once('value', (settingsSnapshot) => {
+          if (settingsSnapshot.exists()) {
+            const settings = settingsSnapshot.val();
+            // isHostチェックをせずに設定を適用
+            if (settings.filters) {
+              applyFiltersFromFirebase(settings.filters);
+            }
+            if (settings.playerCount !== undefined) {
+              playerCountInput.value = settings.playerCount;
+            }
+            updatePool();
+            saveSettings(); // 適用した設定をローカルストレージにも保存
+          }
+          // UIをホストモードに切り替える
+          state.isHost = true;
+          setRealtimeUiState('in_room_host');
         });
+
+        // 新ホストになったことをチャットで通知
+        if (playerArray.length > 1) {
+            state.roomRef.child('chat').push({
+                name: null,
+                message: t('system-new-host', { name: me.name }),
+                isSystem: true,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+      } else {
+        // 状態が変わらない、またはビューワーになった/のままの場合
+        state.isHost = isNowHost;
+        setRealtimeUiState(state.isHost ? 'in_room_host' : 'in_room_viewer');
       }
-      setRealtimeUiState(state.isHost ? 'in_room_host' : 'in_room_viewer');
     } else {
       // 自分が見つからない = キックされたか、自ら退出したか、ブロックされた
       handleLeaveRoom(false); // UIリセットのみ
@@ -1351,9 +1406,18 @@ function listenToRoomChanges() {
   });
 
   // フィルター情報の変更をリッスン（視聴者のみ）
-  state.roomRef.child('filters').on('value', (snapshot) => {
+  state.roomRef.child('settings').on('value', (snapshot) => {
     if (snapshot.exists()) {
-      applyFiltersFromFirebase(snapshot.val());
+      applySettingsFromFirebase(snapshot.val());
+    }
+  });
+
+  // パスワード保護状態の変更をリッスン
+  state.roomRef.child('hasPassword').on('value', (snapshot) => {
+    const hasPassword = snapshot.val();
+    const passwordLockIcon = $('#password-lock-icon');
+    if (passwordLockIcon) {
+      passwordLockIcon.style.display = hasPassword ? 'inline-flex' : 'none';
     }
   });
 
@@ -1425,7 +1489,7 @@ function setRealtimeUiState(uiState) {
     }
 
     // フィルターUIの有効/無効を切り替え
-    $$('#classFilters input, #classFilters button, #noRepeat').forEach(el => {
+    $$('#classFilters input, #classFilters button, #noRepeat, #playerCount').forEach(el => {
       el.disabled = isViewer;
     });
 }
@@ -1447,9 +1511,16 @@ function handleLeaveRoom(removeFromDb = true) {
   state.playerRef = null;
   state.roomId = null;
   state.isHost = false;
+  roomPasswordInput.value = '';
 
   setRealtimeUiState('disconnected');
   updatePlayerList([]);
+
+  // ボタンの状態をリセット
+  createRoomBtn.disabled = false;
+  joinRoomBtn.disabled = false;
+  createRoomBtn.textContent = t('realtime-create-btn');
+  joinRoomBtn.textContent = t('realtime-join-btn');
 
   // Clear online history and load local history
   state.history = [];
@@ -1517,7 +1588,12 @@ function buildFilterUI() {
 function setupEventListeners() {
   $('#spinBtn').addEventListener('click', startSpin);
   $('#resetBtn').addEventListener('click', resetAll);
-  playerCountInput.addEventListener('change', saveSettings);
+  playerCountInput.addEventListener('change', () => {
+    saveSettings();
+    if (state.isHost) {
+      updateRoomSettingsOnFirebase();
+    }
+  });
 
   // Realtime controls
   createRoomBtn.addEventListener('click', createRoom);
@@ -1616,7 +1692,7 @@ function setupEventListeners() {
       updatePool();
       saveSettings();
       if (state.isHost) {
-        updateFiltersOnFirebase();
+        updateRoomSettingsOnFirebase();
       }
     };
   }
@@ -1632,7 +1708,7 @@ function setupEventListeners() {
     updatePool();
     saveSettings();
     if (state.isHost) {
-      updateFiltersOnFirebase();
+      updateRoomSettingsOnFirebase();
     }
   });
 
@@ -1649,7 +1725,7 @@ function setupEventListeners() {
       updatePool();
       saveSettings();
       if (state.isHost) {
-        updateFiltersOnFirebase();
+        updateRoomSettingsOnFirebase();
       }
     }
   });
