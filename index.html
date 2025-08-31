@@ -2,11 +2,11 @@
 <html lang="ja">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>スプラトゥーン3 ブキルーレット</title>
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
+<body data-reconnecting-text="再接続しています...">
   <div class="app">
     <header>
       <h1 data-i18n-key="app-title">スプラトゥーン3｜ブキルーレット</h1>
@@ -20,7 +20,7 @@
           <button id="createRoomBtn" class="btn secondary" data-i18n-key="realtime-create-btn"></button>
         </div>
         <div id="room-info-ui" style="display: none;">
-          <span data-i18n-key="realtime-room-id"></span> <code id="roomIdDisplay"></code>
+          <span data-i18n-key="realtime-room-id"></span> <code id="roomIdDisplay" data-i18n-title="copy-room-id" title="クリックしてコピー"></code>
           <span id="host-badge" class="pill" style="display:none;" data-i18n-key="realtime-host"></span>
           <button id="leaveRoomBtn" class="btn danger" data-i18n-key="realtime-leave-btn" style="padding: 4px 10px; font-size: 13px;">退出</button>
         </div>
@@ -89,8 +89,19 @@
             <strong data-i18n-key="player-list-title">参加者</strong>
             <span id="playerCountDisplay" class="muted">0 人</span>
           </div>
-          <div id="player-list" class="player-list custom-scrollbar">
-            <!-- Player list will be populated by JS -->
+          <div id="player-list" class="player-list custom-scrollbar" style="position: relative;">
+            <!-- 
+              Player list will be populated by JS.
+              Example Player Item Structure:
+              <div class="player-item" data-uid="some-player-uid">
+                <span class="player-name">
+                  <span class="host-icon" style="display: none;">👑</span>
+                  PlayerName
+                  <span class="my-indicator" style="display: none;">(自分)</span>
+                </span>
+                <div class="player-actions" style="display: none;"> <!-- Admin menu button here --> </div>
+              </div>
+            -->
           </div>
         </div>
         <!-- Chat Section -->
