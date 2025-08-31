@@ -17,6 +17,10 @@
         </div>
         <div id="logged-in-view" class="auth-view" style="display: none;">
             <span id="userInfoDisplay"></span>
+            <div id="email-verification-alert" class="alert-warning" style="display: none; margin: 0 10px; padding: 4px 8px; font-size: 12px; border-radius: 6px;">
+              <span data-i18n-key="auth-verify-email-alert"></span>
+              <button id="resendVerificationEmailBtn" class="btn-link" data-i18n-key="auth-resend-verify-email-btn"></button>
+            </div>
             <button id="logoutBtn" class="btn danger" data-i18n-key="auth-logout-btn">ログアウト</button>
         </div>
       </div>
@@ -193,6 +197,15 @@
           <button id="closeAuthModalBtn" class="btn icon secondary" title="閉じる">&times;</button>
         </div>
         <div class="modal-body">
+          <div class="social-login-buttons">
+            <button id="loginWithGoogleBtn" class="btn social google" data-i18n-key="auth-google-btn">Googleで続ける</button>
+            <button id="loginWithTwitterBtn" class="btn social twitter" data-i18n-key="auth-twitter-btn">Xで続ける</button>
+            <button id="loginWithAppleBtn" class="btn social apple" data-i18n-key="auth-apple-btn">Appleで続ける</button>
+          </div>
+          <div class="auth-divider">
+            <hr>
+            <span data-i18n-key="auth-or-divider">または</span>
+          </div>
           <form id="authForm">
             <div class="setting-item" id="displayNameField" style="display: none;">
               <label for="displayNameInput" data-i18n-key="auth-display-name">表示名</label>
