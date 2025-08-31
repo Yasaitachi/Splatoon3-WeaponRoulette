@@ -8,8 +8,8 @@ const translations = {
     'realtime-create-btn': 'ルーム作成',
     'realtime-room-id': 'ルームID:',
     'realtime-host': 'ホスト',
-    'realtime-join-notification': 'ルームに参加しました。ホストが抽選を開始するのを待っています。',
     'realtime-error-connect': 'ルームに接続できませんでした。IDが正しいか確認してください。',
+    'realtime-player-name-placeholder': 'オンラインプレイで表示される名前',
 
     // Header & Controls
     'app-title': 'スプラ3 ブキルーレット',
@@ -79,7 +79,6 @@ const translations = {
     // Settings Modal
     'settings-title': '設定',
     'settings-close': '設定を閉じる',
-    'settings-player-name-placeholder': 'オンラインプレイで表示される名前',
 
     // General Settings
     'settings-general-title': '一般設定',
@@ -134,8 +133,8 @@ const translations = {
     'realtime-create-btn': 'Create Room',
     'realtime-room-id': 'Room ID:',
     'realtime-host': 'Host',
-    'realtime-join-notification': 'Joined the room. Waiting for the host to start the draw.',
     'realtime-error-connect': 'Could not connect to the room. Please check the ID and try again.',
+    'realtime-player-name-placeholder': 'Name used for online play',
 
     // Header & Controls
     'app-title': 'Splatoon 3 Weapon Roulette',
@@ -205,7 +204,6 @@ const translations = {
     // Settings Modal
     'settings-title': 'Settings',
     'settings-close': 'Close settings',
-    'settings-player-name-placeholder': 'Name used for online play',
 
     // General Settings
     'settings-general-title': 'General Settings',

@@ -1209,6 +1209,12 @@ function handleLeaveRoom(removeFromDb = true) {
   setRealtimeUiState('disconnected');
   updatePlayerList([]);
 
+  // Clear online history and load local history
+  state.history = [];
+  loadHistory();
+  renderHistory();
+  updatePool();
+
   const url = new URL(window.location);
   url.searchParams.delete('room');
   window.history.pushState({}, '', url);
