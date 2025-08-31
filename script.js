@@ -999,7 +999,7 @@ function initFirebase() {
   }
 }
 
-function createRoom() {
+async function createRoom() {
   const name = playerNameInput.value.trim();
   if (!name) {
     alert(t('player-name-required'));
@@ -1008,11 +1008,22 @@ function createRoom() {
   state.playerName = name;
 
   const roomsRef = state.db.ref('rooms');
-  state.roomRef = roomsRef.push({
+  let newRoomId;
+  let roomExists = true;
+
+  // 衝突しない12桁の数字のIDを生成する
+  while (roomExists) {
+    newRoomId = Math.floor(100000000000 + Math.random() * 900000000000).toString();
+    const snapshot = await roomsRef.child(newRoomId).once('value');
+    roomExists = snapshot.exists();
+  }
+
+  state.roomId = newRoomId;
+  state.roomRef = roomsRef.child(state.roomId);
+  await state.roomRef.set({
     createdAt: firebase.database.ServerValue.TIMESTAMP,
     lastSpin: null
   });
-  state.roomId = state.roomRef.key;
 
   state.playerRef = state.roomRef.child('clients').push({
     name: state.playerName,
@@ -1031,7 +1042,7 @@ async function joinRoom() {
     alert(t('player-name-required'));
     return;
   }
-  const roomId = roomIdInput.value.trim().toUpperCase();
+  const roomId = roomIdInput.value.trim();
   if (!roomId) return;
 
   state.playerName = name;
@@ -1193,7 +1204,6 @@ function handleLeaveRoom(removeFromDb = true) {
   if (removeFromDb && state.playerRef) {
     state.playerRef.onDisconnect().cancel();
     state.playerRef.remove();
-    addChatMessage(null, `${state.playerName} が退出しました。`, true);
   }
 
   if (state.roomRef) {
@@ -1204,7 +1214,6 @@ function handleLeaveRoom(removeFromDb = true) {
   state.playerRef = null;
   state.roomId = null;
   state.isHost = false;
-  state.playerName = '';
 
   setRealtimeUiState('disconnected');
   updatePlayerList([]);

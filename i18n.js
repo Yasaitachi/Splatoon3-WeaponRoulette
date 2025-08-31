@@ -2,7 +2,7 @@ const translations = {
   ja: {
     // Realtime
     'realtime-title': 'リアルタイム連携',
-    'realtime-join-placeholder': 'ルームIDを入力',
+    'realtime-join-placeholder': '12桁のルームID',
     'realtime-join-btn': '参加',
     'realtime-leave-btn': '退出する',
     'realtime-create-btn': 'ルーム作成',
@@ -127,7 +127,7 @@ const translations = {
   en: {
     // Realtime
     'realtime-title': 'Real-time Sync',
-    'realtime-join-placeholder': 'Enter Room ID',
+    'realtime-join-placeholder': '12-digit Room ID',
     'realtime-join-btn': 'Join',
     'realtime-leave-btn': 'Leave Room',
     'realtime-create-btn': 'Create Room',

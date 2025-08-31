@@ -14,7 +14,7 @@
         <div id="room-join-ui">
           <strong data-i18n-key="realtime-title"></strong>
           <input type="text" id="playerNameInput" class="input-text" data-i18n-placeholder="realtime-player-name-placeholder" maxlength="20">
-          <input type="text" id="roomIdInput" class="input-text" data-i18n-placeholder="realtime-join-placeholder">
+          <input type="text" id="roomIdInput" class="input-text" data-i18n-placeholder="realtime-join-placeholder" maxlength="12" pattern="[0-9]*" inputmode="numeric">
           <button id="joinRoomBtn" class="btn secondary" data-i18n-key="realtime-join-btn"></button>
           <span class="muted" style="margin: 0 4px;">or</span>
           <button id="createRoomBtn" class="btn secondary" data-i18n-key="realtime-create-btn"></button>
