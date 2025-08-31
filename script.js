@@ -30,7 +30,6 @@ const state = {
   roomId: null,
   isHost: false,
   playerName: '',
-  roomPassword: null,
   lang: 'ja',
   theme: 'system',
 };
@@ -56,8 +55,6 @@ const createRoomBtn = $('#createRoomBtn');
 const joinRoomBtn = $('#joinRoomBtn');
 const leaveRoomBtn = $('#leaveRoomBtn');
 const roomIdInput = $('#roomIdInput');
-const roomPasswordInput = $('#roomPasswordInput');
-const copyRoomUrlBtn = $('#copyRoomUrlBtn');
 const roomJoinUi = $('#room-join-ui');
 const roomInfoUi = $('#room-info-ui');
 const roomIdDisplay = $('#roomIdDisplay');
@@ -1133,14 +1130,12 @@ async function createRoom() { // UIの状態を更新して、処理中である
   };
 
   const name = playerNameInput.value.trim();
-  const password = roomPasswordInput.value;
   if (!name) {
     alert(t('player-name-required'));
     reEnableButtons();
     return;
   }
   state.playerName = name;
-  state.roomPassword = password || null;
 
   const ip = await getIPAddress();
   try {
@@ -1157,14 +1152,10 @@ async function createRoom() { // UIの状態を更新して、処理中である
 
     state.roomId = newRoomId;
     state.roomRef = roomsRef.child(state.roomId);
-    const roomData = {
+    await state.roomRef.set({
       createdAt: firebase.database.ServerValue.TIMESTAMP,
       lastSpin: null
-    };
-    if (password) {
-      roomData.password = password;
-    }
-    await state.roomRef.set(roomData);
+    });
 
     state.playerRef = state.roomRef.child('clients').push({
       name: state.playerName,
@@ -1180,7 +1171,6 @@ async function createRoom() { // UIの状態を更新して、処理中である
     console.error("Error creating room:", error);
     const detail = error.code ? `(${error.code})` : `(${error.message})`;
     alert(`${t('realtime-error-create')} ${detail}`);
-    state.roomPassword = null;
     reEnableButtons();
   }
 }
@@ -1209,10 +1199,6 @@ async function joinRoom() {
     return;
   }
 
-  // URLからパスコードを取得
-  const params = new URLSearchParams(window.location.search);
-  const passFromUrl = params.get('pass');
-
   state.playerName = name;
   state.roomId = roomId;
   state.roomRef = state.db.ref(`rooms/${state.roomId}`);
@@ -1224,27 +1210,6 @@ async function joinRoom() {
       alert(t('realtime-error-connect'));
       reEnableButtons();
       return;
-    }
-
-    const roomData = snapshot.val();
-    state.roomPassword = roomData.password || null;
-
-    if (roomData.password) {
-      // URLのパスコードが正しければプロンプトをスキップ
-      if (passFromUrl && passFromUrl === roomData.password) {
-        // OK, 認証成功
-      } else {
-        const enteredPassword = prompt(t('realtime-enter-password-prompt'));
-        if (enteredPassword === null) { // User cancelled the prompt
-          reEnableButtons();
-          return;
-        }
-        if (enteredPassword !== roomData.password) {
-          alert(t('realtime-error-wrong-password'));
-          reEnableButtons();
-          return;
-        }
-      }
     }
 
     // Check if banned by IP
@@ -1277,7 +1242,6 @@ async function joinRoom() {
     console.error("Error joining room:", error);
     const detail = error.code ? `(${error.code})` : `(${error.message})`;
     alert(`${t('realtime-error-join')} ${detail}`);
-    state.roomPassword = null;
     reEnableButtons();
   }
 }
@@ -1397,11 +1361,6 @@ function listenToRoomChanges() {
   roomIdDisplay.textContent = state.roomId;
   const url = new URL(window.location);
   url.searchParams.set('room', state.roomId);
-  if (state.roomPassword) {
-    url.searchParams.set('pass', state.roomPassword);
-  } else {
-    url.searchParams.delete('pass');
-  }
   window.history.pushState({}, '', url);
 }
 
@@ -1469,7 +1428,6 @@ function handleLeaveRoom(removeFromDb = true) {
   state.playerRef = null;
   state.roomId = null;
   state.isHost = false;
-  state.roomPassword = null;
 
   // 参加/作成ボタンの状態をリセットし、UIが再表示されたときに正しい状態にする
   createRoomBtn.disabled = false;
@@ -1488,7 +1446,6 @@ function handleLeaveRoom(removeFromDb = true) {
 
   const url = new URL(window.location);
   url.searchParams.delete('room');
-  url.searchParams.delete('pass');
   window.history.pushState({}, '', url);
 }
 
@@ -1552,16 +1509,7 @@ function setupEventListeners() {
   createRoomBtn.addEventListener('click', createRoom);
   joinRoomBtn.addEventListener('click', joinRoom);
   leaveRoomBtn.addEventListener('click', () => handleLeaveRoom(true));
-  roomIdDisplay.addEventListener('click', () => {
-    navigator.clipboard.writeText(state.roomId).then(() => {
-      alert(t('realtime-copy-id-success'));
-    }).catch(err => {
-      console.error('Could not copy room ID: ', err);
-    });
-  });
-  copyRoomUrlBtn.addEventListener('click', () => {
-    navigator.clipboard.writeText(window.location.href).then(() => alert(t('realtime-copy-url-success')));
-  });
+  roomIdDisplay.addEventListener('click', () => navigator.clipboard.writeText(state.roomId));
   chatSendBtn.addEventListener('click', sendChatMessage);
   chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
