@@ -19,9 +19,6 @@ const translations = {
     'realtime-you': 'あなた',
     'realtime-admin-menu': '管理メニュー',
     'realtime-reconnecting': 'サーバーに再接続しています...',
-    'realtime-disband-btn': '解散',
-    'realtime-disband-confirm': '本当にルームを解散しますか？すべての参加者が退出させられます。',
-    'realtime-disband-notification': 'ホストによってルームが解散されました。',
 
     // Header & Controls
     'app-title': 'スプラ3 ブキルーレット',
@@ -170,9 +167,6 @@ const translations = {
     'realtime-you': 'You',
     'realtime-admin-menu': 'Admin Menu',
     'realtime-reconnecting': 'Reconnecting to server...',
-    'realtime-disband-btn': 'Disband',
-    'realtime-disband-confirm': 'Are you sure you want to disband the room? All participants will be removed.',
-    'realtime-disband-notification': 'The room was disbanded by the host.',
 
     // Header & Controls
     'app-title': 'Splatoon 3 Weapon Roulette',
