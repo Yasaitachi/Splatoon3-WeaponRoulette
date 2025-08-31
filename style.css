@@ -468,8 +468,10 @@ input:checked + .slider:before {
   transition: all .2s ease;
 }
 .btn-kick.block { border-color: var(--danger); color: var(--danger); }
+.btn-kick.ban { border-color: #ff9800; color: #ff9800; } /* Orange for BAN */
 .btn-kick:hover { background: var(--accent); color: var(--btn-text); border-color: var(--accent); }
 .btn-kick.block:hover { background: var(--danger); color: var(--btn-text); border-color: var(--danger); }
+.btn-kick.ban:hover { background: #ff9800; color: var(--btn-text); border-color: #ff9800; }
 
 .my-indicator {
   display: inline-block;

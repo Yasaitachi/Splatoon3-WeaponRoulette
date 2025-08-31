@@ -74,6 +74,22 @@ function getWeaponName(weapon) {
   return state.lang === 'en' && weapon.name_en ? weapon.name_en : weapon.name;
 }
 
+/**
+ * 3rd-party API to get public IP address.
+ * @returns {Promise<string|null>}
+ */
+async function getIPAddress() {
+  try {
+    const response = await fetch('https://api.ipify.org?format=json');
+    if (!response.ok) return null;
+    const data = await response.json();
+    return data.ip;
+  } catch (error) {
+    console.error("Could not get IP address:", error);
+    return null;
+  }
+}
+
 function getActivePool() {
   const enabledClass = $$('input[data-class]:checked').map(i => i.getAttribute('data-class'));
   const enabledSub = $$('input[data-sub]:checked').map(i => i.getAttribute('data-sub'));
@@ -904,10 +920,25 @@ function updatePlayerList(players) {
   playerListEl.innerHTML = players.map(player => {
       const isMe = state.playerRef && player.id === state.playerRef.key;
       const meIndicator = isMe ? ` <span class="my-indicator" title="${t('realtime-you')}">👤</span>` : '';
+      const hostIndicator = player.isHost ? ` <span class="host-icon" title="${t('realtime-host')}">👑</span>` : '';
+      
+      let adminControls = '';
+      if (state.isHost && !player.isHost) {
+          adminControls = `
+            <div class="player-actions">
+                <button class="btn-kick" data-action="kick" data-player-id="${player.id}" data-player-name="${player.name}" title="${t('realtime-kick-player')}">${t('realtime-kick-player')}</button>
+                <button class="btn-kick block" data-action="block" data-player-id="${player.id}" data-player-name="${player.name}" title="${t('realtime-block-player')}">${t('realtime-block-player')}</button>
+                <button class="btn-kick ban" data-action="ban" data-player-id="${player.id}" data-player-name="${player.name}" title="${t('realtime-ban-player')}">${t('realtime-ban-player')}</button>
+            </div>
+          `;
+      }
+
       return `
       <div class="player-item">
-          <span>${player.name}${meIndicator}</span>
-          ${player.isHost ? `<span class="host-icon" title="${t('realtime-host')}">👑</span>` : ''}
+          <div class="player-name">
+            <span>${player.name}${meIndicator}${hostIndicator}</span>
+          </div>
+          ${adminControls}
       </div>
   `}).join('');
 }
@@ -1012,6 +1043,29 @@ function initFirebase() {
   }
 }
 
+function kickPlayer(playerId, playerName) {
+    if (!state.isHost || !state.roomRef) return;
+    const message = t('system-player-kicked', { name: playerName, host: state.playerName });
+    state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    state.roomRef.child('clients').child(playerId).remove();
+}
+
+function blockPlayer(playerId, playerName) {
+    if (!state.isHost || !state.roomRef) return;
+    state.roomRef.child('blockedNames').push(playerName);
+    const message = t('system-player-blocked', { name: playerName, host: state.playerName });
+    state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    state.roomRef.child('clients').child(playerId).remove();
+}
+
+function banPlayer(playerId, playerName) {
+    if (!state.isHost || !state.roomRef) return;
+    const playerToBan = state.players.find(p => p.id === playerId);
+    if (!playerToBan || !playerToBan.ip) return;
+    state.roomRef.child('bannedIPs').push(playerToBan.ip);
+    blockPlayer(playerId, playerName); // Also block by name and kick
+}
+
 async function createRoom() { // UIの状態を更新して、処理中であることをユーザーにフィードバック
   if (!state.db) {
     alert("データベースに接続できません。ページをリロードして再度お試しください。");
@@ -1037,6 +1091,7 @@ async function createRoom() { // UIの状態を更新して、処理中である
   }
   state.playerName = name;
 
+  const ip = await getIPAddress();
   try {
     const roomsRef = state.db.ref('rooms');
     let newRoomId;
@@ -1058,7 +1113,8 @@ async function createRoom() { // UIの状態を更新して、処理中である
 
     state.playerRef = state.roomRef.child('clients').push({
       name: state.playerName,
-      joinedAt: firebase.database.ServerValue.TIMESTAMP
+      joinedAt: firebase.database.ServerValue.TIMESTAMP,
+      ip: ip
     });
     state.playerRef.onDisconnect().remove();
 
@@ -1099,6 +1155,7 @@ async function joinRoom() {
   state.playerName = name;
   state.roomId = roomId;
   state.roomRef = state.db.ref(`rooms/${state.roomId}`);
+  const ip = await getIPAddress();
 
   try {
     const snapshot = await state.roomRef.once('value');
@@ -1108,9 +1165,28 @@ async function joinRoom() {
       return;
     }
 
+    // Check if banned by IP
+    const bannedIPsSnapshot = await state.roomRef.child('bannedIPs').once('value');
+    const bannedIPs = Object.values(bannedIPsSnapshot.val() || {});
+    if (ip && bannedIPs.includes(ip)) {
+        alert(t('realtime-error-banned-ip'));
+        reEnableButtons();
+        return;
+    }
+
+    // Check if blocked by name
+    const blockedNamesSnapshot = await state.roomRef.child('blockedNames').once('value');
+    const blockedNames = Object.values(blockedNamesSnapshot.val() || {});
+    if (blockedNames.includes(name)) {
+        alert(t('realtime-error-blocked'));
+        reEnableButtons();
+        return;
+    }
+
     state.playerRef = state.roomRef.child('clients').push({
       name: state.playerName,
-      joinedAt: firebase.database.ServerValue.TIMESTAMP
+      joinedAt: firebase.database.ServerValue.TIMESTAMP,
+      ip: ip
     });
     state.playerRef.onDisconnect().remove();
 
@@ -1144,9 +1220,11 @@ function listenToRoomChanges() {
       .map(([key, val], index) => ({
         id: key,
         name: val.name,
-        isHost: index === 0
+        isHost: index === 0,
+        ip: val.ip || null
       }));
 
+    state.players = playerArray;
     updatePlayerList(playerArray);
 
     const me = playerArray.find(p => p.id === state.playerRef?.key);
@@ -1163,7 +1241,7 @@ function listenToRoomChanges() {
       }
       setRealtimeUiState(state.isHost ? 'in_room_host' : 'in_room_viewer');
     } else {
-      // 自分が見つからない = 退出した
+      // 自分が見つからない = キックされたか、自ら退出したか、ブロックされた
       handleLeaveRoom(false); // UIリセットのみ
     }
   });
@@ -1354,6 +1432,21 @@ function setupEventListeners() {
     if (e.key === 'Enter') {
       sendChatMessage();
     }
+  });
+
+  playerListEl.addEventListener('click', (e) => {
+      const button = e.target.closest('[data-action]');
+      if (!button || !state.isHost) return;
+
+      const { action, playerId, playerName } = button.dataset;
+
+      if (action === 'kick' && confirm(t('realtime-kick-confirm', { name: playerName }))) {
+          kickPlayer(playerId, playerName);
+      } else if (action === 'block' && confirm(t('realtime-block-confirm', { name: playerName }))) {
+          blockPlayer(playerId, playerName);
+      } else if (action === 'ban' && confirm(t('realtime-ban-confirm', { name: playerName }))) {
+          banPlayer(playerId, playerName);
+      }
   });
 
   fullscreenBtn?.addEventListener('click', toggleFullscreen);
