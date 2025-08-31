@@ -69,11 +69,29 @@ const chatContainer = $('#chat-container');
 const chatMessagesEl = $('#chat-messages');
 const chatInput = $('#chatInput');
 const chatSendBtn = $('#chatSendBtn');
+const findRoomBtn = $('#findRoomBtn');
+const publicRoomCheckbox = $('#publicRoomCheckbox');
+const roomListModal = $('#roomListModal');
+const closeRoomListBtn = $('#closeRoomListBtn');
+const roomListTableBody = $('#roomListTableBody');
+const roomListEmpty = $('#room-list-empty');
+const loaderOverlay = $('#loader-overlay');
 
 // --- アプリケーションロジック ----------------------------------------------
 
 function getWeaponName(weapon) {
   return state.lang === 'en' && weapon.name_en ? weapon.name_en : weapon.name;
+}
+
+function showLoader(visible) {
+    if (loaderOverlay) {
+        loaderOverlay.style.display = visible ? 'flex' : 'none';
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, (match) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[match]));
 }
 
 /**
@@ -1157,7 +1175,9 @@ async function createRoom() { // UIの状態を更新して、処理中である
     await state.roomRef.set({
       createdAt: firebase.database.ServerValue.TIMESTAMP,
       lastActivity: firebase.database.ServerValue.TIMESTAMP,
-      lastSpin: null
+      lastSpin: null,
+      public: publicRoomCheckbox.checked,
+      host: state.playerName,
     });
 
     state.playerRef = state.roomRef.child('clients').push({
@@ -1560,6 +1580,13 @@ function setupEventListeners() {
     }
   });
 
+  // Room List Modal Listeners
+  findRoomBtn.addEventListener('click', showRoomList);
+  closeRoomListBtn.addEventListener('click', closeRoomListModal);
+  roomListModal.addEventListener('click', (e) => {
+    if (e.target === roomListModal) closeRoomListModal();
+  });
+
   // Admin menu and actions handler
   document.addEventListener('click', (e) => {
     const menuButton = e.target.closest('[data-action="admin-menu"]');
@@ -1731,5 +1758,12 @@ function init() {
     state.playerName = playerNameInput.value;
   });
 }
+
+// グローバルスコープに関数を公開
+window.joinRoomById = (id) => {
+  roomIdInput.value = id;
+  closeRoomListModal();
+  joinRoom();
+};
 
 init();
