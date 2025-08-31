@@ -1380,6 +1380,12 @@ function handleLeaveRoom(removeFromDb = true) {
   state.roomId = null;
   state.isHost = false;
 
+  // 参加/作成ボタンの状態をリセットし、UIが再表示されたときに正しい状態にする
+  createRoomBtn.disabled = false;
+  joinRoomBtn.disabled = false;
+  createRoomBtn.textContent = t('realtime-create-btn');
+  joinRoomBtn.textContent = t('realtime-join-btn');
+
   setRealtimeUiState('disconnected');
   updatePlayerList([]);
 
