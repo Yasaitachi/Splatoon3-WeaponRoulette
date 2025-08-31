@@ -51,6 +51,7 @@ const settingsModal = $('#settingsModal');
 const closeSettingsBtn = $('#closeSettingsBtn');
 const createRoomBtn = $('#createRoomBtn');
 const joinRoomBtn = $('#joinRoomBtn');
+const leaveRoomBtn = $('#leaveRoomBtn');
 const roomIdInput = $('#roomIdInput');
 const roomJoinUi = $('#room-join-ui');
 const roomInfoUi = $('#room-info-ui');
@@ -204,10 +205,22 @@ function pickRandom(arr) {
 
 function setControlsDisabled(disabled) {
   // 全画面ボタンはルーレット実行中も操作可能にするため、無効化の対象から除外する
-  $$('.controls button:not(#fullscreenBtn), .controls input, #history button, #resetBtn').forEach(c => {
-    c.disabled = disabled;
-  });
-  $$('#classFilters input').forEach(c => c.disabled = disabled);
+  // When disabling, disable everything.
+  if (disabled) {
+    $$('.main-controls button:not(#fullscreenBtn), .main-controls input, #history button').forEach(c => c.disabled = true);
+    $$('#classFilters input, #classFilters button').forEach(c => c.disabled = true);
+    return;
+  }
+
+  // When enabling, restore state based on role.
+  if (state.roomRef) {
+    // In a room, restore state based on host/viewer role
+    setRealtimeUiState(state.isHost ? 'in_room_host' : 'in_room_viewer');
+  } else {
+    // In local mode, enable all controls
+    $$('.main-controls button:not(#fullscreenBtn), .main-controls input, #history button').forEach(c => c.disabled = false);
+    $$('#classFilters input, #classFilters button').forEach(c => c.disabled = false);
+  }
 }
 
 /**
@@ -1260,6 +1273,7 @@ function setupEventListeners() {
   // Realtime controls
   createRoomBtn.addEventListener('click', createRoom);
   joinRoomBtn.addEventListener('click', joinRoom);
+  leaveRoomBtn.addEventListener('click', () => handleLeaveRoom(true));
   roomIdDisplay.addEventListener('click', () => navigator.clipboard.writeText(state.roomId));
   chatSendBtn.addEventListener('click', sendChatMessage);
   chatInput.addEventListener('keydown', (e) => {
@@ -1338,6 +1352,9 @@ function setupEventListeners() {
       checkboxes.forEach(cb => cb.checked = newCheckedState);
       updatePool();
       saveSettings();
+      if (state.isHost) {
+        updateFiltersOnFirebase();
+      }
     }
   });
 }
