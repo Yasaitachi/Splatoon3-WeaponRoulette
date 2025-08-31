@@ -10,26 +10,35 @@
   <div class="app">
     <header>
       <h1 data-i18n-key="app-title">スプラトゥーン3｜ブキルーレット</h1>
-      <div id="realtime-controls">
-        <div id="room-join-ui">
-          <strong data-i18n-key="realtime-title"></strong>
-          <input type="text" id="playerNameInput" class="input-text" data-i18n-placeholder="realtime-player-name-placeholder" maxlength="20">
-          <input type="text" id="roomIdInput" class="input-text" data-i18n-placeholder="realtime-join-placeholder" maxlength="12" pattern="[0-9]*" inputmode="numeric">
-          <button id="joinRoomBtn" class="btn secondary" data-i18n-key="realtime-join-btn"></button>
-          <span class="muted" style="margin: 0 4px;">or</span>
-          <button id="createRoomBtn" class="btn secondary" data-i18n-key="realtime-create-btn"></button>
+      <div id="auth-controls">
+        <div id="logged-out-view" class="auth-view" style="display: none;">
+            <button id="showLoginModalBtn" class="btn secondary" data-i18n-key="auth-login-btn">ログイン</button>
+            <button id="showRegisterModalBtn" class="btn secondary" data-i18n-key="auth-register-btn">新規登録</button>
         </div>
-        <div id="room-info-ui" style="display: none;">
-          <span data-i18n-key="realtime-room-id"></span> <code id="roomIdDisplay"></code>
-          <span id="host-badge" class="pill" style="display:none;" data-i18n-key="realtime-host"></span>
-          <button id="leaveRoomBtn" class="btn danger" data-i18n-key="realtime-leave-btn" style="padding: 4px 10px; font-size: 13px;">退出</button>
+        <div id="logged-in-view" class="auth-view" style="display: none;">
+            <span id="userInfoDisplay"></span>
+            <button id="logoutBtn" class="btn danger" data-i18n-key="auth-logout-btn">ログアウト</button>
         </div>
       </div>
     </header>
 
     <div class="main-controls card">
-
-      <div class="pill host-control">
+      <div class="pill">
+        <label for="playerNameInput" style="margin-right: 8px; cursor: pointer;" data-i18n-key="player-name-label">プレイヤー名</label>
+        <input type="text" id="playerNameInput" class="input-text" data-i18n-placeholder="realtime-player-name-placeholder" maxlength="20" style="border:none; background:transparent; width: 150px;">
+      </div>
+      <div id="room-join-ui">
+        <input type="text" id="roomIdInput" class="input-text" data-i18n-placeholder="realtime-join-placeholder" maxlength="12" pattern="[0-9]*" inputmode="numeric" style="width: 120px;">
+        <button id="joinRoomBtn" class="btn secondary" data-i18n-key="realtime-join-btn"></button>
+        <span class="muted" style="margin: 0 4px;">or</span>
+        <button id="createRoomBtn" class="btn secondary" data-i18n-key="realtime-create-btn"></button>
+      </div>
+      <div id="room-info-ui" style="display: none;">
+        <span data-i18n-key="realtime-room-id"></span> <code id="roomIdDisplay"></code>
+        <span id="host-badge" class="pill" style="display:none;" data-i18n-key="realtime-host"></span>
+        <button id="leaveRoomBtn" class="btn danger" data-i18n-key="realtime-leave-btn" style="padding: 4px 10px; font-size: 13px;">退出</button>
+      </div>
+      <div class="pill host-control" style="margin-left: auto;">
         <label for="playerCount" style="margin-right: 8px; cursor: pointer;" data-i18n-key="player-count">プレイヤー数</label>
         <input id="playerCount" type="number" min="1" max="8" value="1">
       </div>
@@ -176,9 +185,37 @@
       </div>
     </div>
 
+    <!-- Auth Modal -->
+    <div id="authModal" class="modal-overlay" style="display: none;">
+      <div class="modal-content card">
+        <div class="modal-header">
+          <h2 id="authModalTitle"></h2>
+          <button id="closeAuthModalBtn" class="btn icon secondary" title="閉じる">&times;</button>
+        </div>
+        <div class="modal-body">
+          <form id="authForm">
+            <div class="setting-item" id="displayNameField" style="display: none;">
+              <label for="displayNameInput" data-i18n-key="auth-display-name">表示名</label>
+              <input type="text" id="displayNameInput" class="input-text" required maxlength="20">
+            </div>
+            <div class="setting-item">
+              <label for="emailInput" data-i18n-key="auth-email">メールアドレス</label>
+              <input type="email" id="emailInput" class="input-text" required>
+            </div>
+            <div class="setting-item">
+              <label for="passwordInput" data-i18n-key="auth-password">パスワード</label>
+              <input type="password" id="passwordInput" class="input-text" required minlength="6">
+            </div>
+            <p id="authError" class="muted" style="color: var(--danger); display: none; margin-top: 12px; margin-bottom: 0; font-size: 13px; text-align: center;"></p>
+            <button type="submit" id="authSubmitBtn" class="btn" style="margin-top: 16px; width: 100%;"></button>
+          </form>
+        </div>
+      </div>
+    </div>
   </div>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
 
   <!-- App Scripts -->
