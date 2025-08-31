@@ -517,6 +517,28 @@ input:checked + .slider:before {
   margin: 4px 0;
 }
 
+#roomListTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+#roomListTable th, #roomListTable td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--card-border);
+}
+#roomListTable th {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 12px;
+}
+#roomListTable tbody tr:hover { background-color: var(--history-item-bg); }
+.room-list-join-btn-col { text-align: right; }
+.my-indicator {
+  display: inline-block;
+  margin-left: 6px;
+}
+
 /* Realtime Controls */
 #realtime-controls {
   display: flex;
