@@ -1,11 +1,6 @@
 // --- Firebase Configuration -----------------------------------------------
 
 // ▼▼▼ PASTE FIREBASE CONFIG HERE ▼▼▼
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
 // Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyCasaRCxU26RD8Dvnzs4pT1uKgbX0MJgr8",
@@ -16,8 +11,6 @@ const firebaseConfig = {
   appId: "1:198539626159:web:66631074abb597ab00f65a"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
 // --- グローバル変数 ---------------------------------------------------------
 const APP_VERSION = '1.1.2'; // アプリケーションのバージョン。更新時にこの数値を変更する。
 const RESET_TIMEOUT_MS = 10000; // 10秒
@@ -242,23 +235,20 @@ function runSingleAnimation(pool, finalPickOverride = null) {
 }
 
 /**
- * 抽選処理のメインフロー
+ * 抽選結果を生成する（オンライン・ローカル共通ロジック）
+ * @returns {Array<Object>|null} 抽選結果のブキ配列、または条件を満たさない場合はnull
  */
-async function performDraw() {
-  if (state.running || !state.isHost || !state.roomRef) return;
-
-  updatePool();
+function getDrawResults() {
   const playerCount = parseInt(playerCountInput.value, 10);
   if (noRepeat.checked && state.pool.length < playerCount) {
     alert(t('no-candidates-alert', { poolCount: state.pool.length, playerCount: playerCount }));
-    return;
+    return null;
   }
   if (state.pool.length === 0) {
     alert(t('no-candidates-alert-title'));
-    return;
+    return null;
   }
 
-  // 抽選をクライアントサイドで行う
   const finalResults = [];
   const tempPool = [...state.pool];
   for (let i = 0; i < playerCount; i++) {
@@ -272,6 +262,18 @@ async function performDraw() {
       }
     }
   }
+  return finalResults;
+}
+
+/**
+ * オンライン抽選を実行し、結果をFirebaseに送信する（ホスト専用）
+ */
+async function performDraw() {
+  if (state.running || !state.isHost || !state.roomRef) return;
+
+  updatePool();
+  const finalResults = getDrawResults();
+  if (!finalResults) return;
 
   // 結果をFirebaseに書き込む
   state.roomRef.child('spinResult').set({
@@ -348,8 +350,22 @@ async function displaySpinResult(finalResults, serverPool) {
 }
 
 
-function startSpin() {
-  performDraw();
+async function startSpin() {
+  if (state.running) return;
+
+  if (state.roomRef) {
+    // オンラインモード: ホストのみが抽選を実行
+    if (state.isHost) {
+      await performDraw();
+    }
+  } else {
+    // ローカルモード
+    updatePool();
+    const finalResults = getDrawResults();
+    if (finalResults) {
+      await displaySpinResult(finalResults, state.pool);
+    }
+  }
 }
 
 function showSpinningText(weapon) {
@@ -1001,7 +1017,12 @@ function setRealtimeUiState(uiState) {
     }
     hostBadge.style.display = (uiState === 'in_room_host') ? 'inline-block' : 'none';
     playerNameInput.disabled = inRoom;
-    spinBtn.disabled = (uiState !== 'in_room_host');
+    // スピンボタンは、ルーム内ではホストのみ、ローカルでは常に有効
+    if (inRoom) {
+      spinBtn.disabled = (uiState !== 'in_room_host');
+    } else {
+      spinBtn.disabled = false;
+    }
 }
 
 function handleLeaveRoom(removeFromDb = true) {
