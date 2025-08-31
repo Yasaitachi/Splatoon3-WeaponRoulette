@@ -14,7 +14,7 @@ const translations = {
     'realtime-room-id': 'ルームID:',
     'realtime-host': 'ホスト',
     'realtime-error-connect': 'ルームに接続できませんでした。IDが正しいか確認してください。',
-    'realtime-player-name-placeholder': 'オンラインプレイで表示される名前',
+    'realtime-reconnecting': 'サーバーに再接続しています...',
 
     // Header & Controls
     'app-title': 'スプラ3 ブキルーレット',
@@ -144,7 +144,7 @@ const translations = {
     'realtime-room-id': 'Room ID:',
     'realtime-host': 'Host',
     'realtime-error-connect': 'Could not connect to the room. Please check the ID and try again.',
-    'realtime-player-name-placeholder': 'Name used for online play',
+    'realtime-reconnecting': 'Reconnecting to server...',
 
     // Header & Controls
     'app-title': 'Splatoon 3 Weapon Roulette',

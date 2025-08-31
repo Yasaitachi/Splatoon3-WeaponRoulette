@@ -462,3 +462,26 @@ input:checked + .slider:before {
 #host-badge { padding: 2px 8px; font-size: 10px; }
 .leave-room-container { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--card-border); }
 .leave-room-container .btn { width: 100%; }
+
+/* --- Status Indicators --- */
+body.offline::before {
+  content: attr(data-reconnecting-text);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  background-color: #ffc107; /* Amber color */
+  color: #000;
+  text-align: center;
+  padding: 5px;
+  font-size: 14px;
+  font-weight: bold;
+  z-index: 1001;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
