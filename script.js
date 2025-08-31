@@ -154,6 +154,8 @@ function updateProbText() {
 function pushHistoryItem(weapon, batchTime, playerNum, totalPlayers) {
   const historyItem = {
     ...weapon,
+    // タイムスタンプとプレイヤー番号、乱数でユニークIDを生成
+    id: `${batchTime}-${playerNum}-${Math.random().toString(36).slice(2)}`,
     time: batchTime,
     playerNum,
     totalPlayers,
@@ -187,9 +189,8 @@ function renderHistory() {
     if (isOnline && state.isHost) {
         deleteButton = `<button class="btn secondary icon" data-delete-key="${h.key}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>`;
     } else if (!isOnline) {
-        // ローカルモードではインデックスで削除
-        const localIndex = state.history.findIndex(localItem => localItem.time === h.time && localItem.name === h.name);
-        deleteButton = `<button class="btn secondary icon" data-delete-index="${localIndex}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>`;
+        // ローカルモードではIDで削除
+        deleteButton = `<button class="btn secondary icon" data-delete-id="${h.id}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>`;
     }
 
     return `
@@ -212,7 +213,7 @@ function renderHistory() {
 }
 
 function handleDeleteHistoryItem(e) {
-  const target = e.target.closest('[data-delete-key], [data-delete-index]');
+  const target = e.target.closest('[data-delete-key], [data-delete-id]');
   if (!target) return;
 
   // Online mode: host can delete by key
@@ -225,14 +226,17 @@ function handleDeleteHistoryItem(e) {
     }
   }
 
-  // Local mode: delete by index
+  // Local mode: delete by id
   if (!state.roomRef) {
-    const index = parseInt(target.dataset.deleteIndex, 10);
-    if (!isNaN(index)) {
-      state.history.splice(index, 1);
-      renderHistory();
-      saveHistory();
-      updatePool();
+    const idToDelete = target.dataset.deleteId;
+    if (idToDelete) {
+      const index = state.history.findIndex(item => item.id === idToDelete);
+      if (index > -1) {
+        state.history.splice(index, 1);
+        renderHistory();
+        saveHistory();
+        updatePool();
+      }
     }
   }
 }
@@ -432,7 +436,7 @@ async function performDraw() {
   if (!finalResults) return;
 
   // 結果をFirebaseに書き込む
-  state.roomRef.child('spinResult').set({
+  await state.roomRef.child('spinResult').set({
     finalResults: finalResults,
     pool: state.pool, // アニメーション用に元のプールも渡す
     timestamp: firebase.database.ServerValue.TIMESTAMP
@@ -445,7 +449,12 @@ async function startSpin() {
   if (state.roomRef) {
     // オンラインモード: ホストのみが抽選を実行
     if (state.isHost) {
-      await performDraw();
+      try {
+        await performDraw();
+      } catch (error) {
+        console.error("Error starting spin:", error);
+        alert(t('error-performing-draw'));
+      }
     }
   } else {
     // ローカルモード
