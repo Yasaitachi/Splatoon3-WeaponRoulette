@@ -10,22 +10,36 @@
   <div class="app">
     <header>
       <h1 data-i18n-key="app-title">スプラトゥーン3｜ブキルーレット</h1>
-      <!-- リアルタイムコントロールを削除 -->
+      <div id="realtime-controls">
+        <div id="room-join-ui">
+          <strong data-i18n-key="realtime-title"></strong>
+          <input type="text" id="playerNameInput" class="input-text" data-i18n-placeholder="realtime-player-name-placeholder" maxlength="20">
+          <input type="text" id="roomIdInput" class="input-text" data-i18n-placeholder="realtime-join-placeholder" maxlength="12" pattern="[0-9]*" inputmode="numeric">
+          <button id="joinRoomBtn" class="btn secondary" data-i18n-key="realtime-join-btn"></button>
+          <span class="muted" style="margin: 0 4px;">or</span>
+          <button id="createRoomBtn" class="btn secondary" data-i18n-key="realtime-create-btn"></button>
+        </div>
+        <div id="room-info-ui" style="display: none;">
+          <span data-i18n-key="realtime-room-id"></span> <code id="roomIdDisplay"></code>
+          <span id="host-badge" class="pill" style="display:none;" data-i18n-key="realtime-host"></span>
+          <button id="leaveRoomBtn" class="btn danger" data-i18n-key="realtime-leave-btn" style="padding: 4px 10px; font-size: 13px;">退出</button>
+        </div>
+      </div>
     </header>
 
     <div class="main-controls card">
 
-      <div class="pill">
+      <div class="pill host-control">
         <label for="playerCount" style="margin-right: 8px; cursor: pointer;" data-i18n-key="player-count">プレイヤー数</label>
         <input id="playerCount" type="number" min="1" max="8" value="1">
       </div>
-      <button id="spinBtn" class="btn" data-i18n-aria-label="spin" data-i18n-key="spin">回す</button>
-      <label class="switch pill" data-i18n-title="no-repeat-title" title="有効にすると、一度出たブキは履歴をリセットするまで抽選対象から除外されます">
+      <button id="spinBtn" class="btn host-control" data-i18n-aria-label="spin" data-i18n-key="spin">回す</button>
+      <label class="switch pill host-control" data-i18n-title="no-repeat-title" title="有効にすると、一度出たブキは履歴をリセットするまで抽選対象から除外されます">
         <input id="noRepeat" type="checkbox" />
         <span data-i18n-key="no-repeat">重複なし</span>
       </label>
-      <button id="resetBtn" class="btn danger" data-i18n-aria-label="reset" data-i18n-key="reset">リセット</button>
-      <div class="controls-divider"></div>
+      <button id="resetBtn" class="btn danger host-control" data-i18n-aria-label="reset" data-i18n-key="reset">リセット</button>
+      <div class="controls-divider host-control"></div>
       <button id="fullscreenBtn" class="btn secondary icon" data-i18n-title="fullscreen" data-i18n-aria-label="fullscreen-toggle">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
       </button>
@@ -69,6 +83,28 @@
         <div id="history" class="history custom-scrollbar">
           <div class="empty" data-i18n-key="history-empty">まだ結果がありません</div>
         </div>
+        <!-- Player List Section -->
+        <div id="player-list-container" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--card-border);">
+          <div style="display:flex; justify-content:space-between; align-items: center; margin-bottom:8px;">
+            <strong data-i18n-key="player-list-title">参加者</strong>
+            <span id="playerCountDisplay" class="muted">0 人</span>
+          </div>
+          <div id="player-list" class="player-list custom-scrollbar">
+            <!-- Player list will be populated by JS -->
+          </div>
+        </div>
+        <!-- Chat Section -->
+        <div id="chat-container" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--card-border);">
+          <strong data-i18n-key="chat-title">チャット</strong>
+          <div id="chat-messages" class="chat-messages custom-scrollbar"></div>
+          <div id="typing-indicator" class="typing-indicator"></div>
+          <div class="chat-input-area">
+            <input type="text" id="chatInput" class="input-text" data-i18n-placeholder="chat-placeholder">
+            <button id="chatSendBtn" class="btn secondary icon" data-i18n-title="chat-send-btn-title" title="送信">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
+          </div>
+        </div>
       </aside>
     </div>
 
@@ -111,10 +147,41 @@
             </div>
             <p class="muted small" data-i18n-key="settings-auto-copy-help">抽選完了後、結果をテキスト形式でクリップボードにコピーします。</p>
           </div>
+          <div class="settings-section">
+            <h3 data-i18n-key="settings-webhook-title">Discord Webhook連携</h3>
+            <p class="muted" data-i18n-key="settings-webhook-desc">抽選結果をDiscordチャンネルに自動で送信します。</p>
+            <div class="setting-item row">
+              <label for="webhookEnable" data-i18n-key="settings-webhook-enable">Webhookを有効にする</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="webhookEnable">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <div id="webhookUrlContainer">
+              <div class="setting-item">
+                <label for="webhookUrl" data-i18n-key="settings-webhook-url">Webhook URL</label>
+                <input type="url" id="webhookUrl" placeholder="https://discord.com/api/webhooks/..." class="input-text">
+              </div>
+              <div class="setting-item">
+                <label for="webhookTemplate" data-i18n-key="settings-webhook-template">カスタムメッセージ</label>
+                <textarea id="webhookTemplate" class="input-text" rows="3" data-i18n-placeholder="settings-webhook-template-placeholder"></textarea>
+                <p class="muted small" data-i18n-key="settings-webhook-template-help" data-i18n-target="innerHTML"></p>
+              </div>
+              <div class="setting-item">
+                <label for="webhookMentions" data-i18n-key="settings-webhook-mentions"></label>
+                <input type="text" id="webhookMentions" class="input-text" data-i18n-placeholder="settings-webhook-mentions-placeholder">
+                <p class="muted small" data-i18n-key="settings-webhook-mentions-help"></p>
+              </div>
+              <button type="button" id="testWebhookBtn" class="btn secondary" data-i18n-key="settings-webhook-test-send">送信テスト</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   </div>
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
 
   <!-- App Scripts -->
   <script src="Weapon-data.js"></script>
