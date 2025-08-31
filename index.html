@@ -10,6 +10,13 @@
   <div class="app">
     <header>
       <h1 data-i18n-key="app-title">スプラトゥーン3｜ブキルーレット</h1>
+      <div id="room-info" class="card" style="display: none; padding: 8px 12px; margin-left: auto; font-size: 14px; gap: 8px; align-items: center;">
+        <strong data-i18n-key="room-share">リアルタイム共有中</strong>
+        <div class="pill" style="padding: 4px 8px;">
+          <input type="text" id="roomUrl" readonly style="border:none; background:transparent; color: var(--text); width: 240px;">
+          <button id="copyRoomUrlBtn" class="btn icon secondary" data-i18n-title="copy-room-url" style="padding: 4px;"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
+        </div>
+      </div>
     </header>
 
     <div class="main-controls card">
@@ -68,6 +75,21 @@
         <div id="history" class="history custom-scrollbar">
           <div class="empty" data-i18n-key="history-empty">まだ結果がありません</div>
         </div>
+
+        <!-- ▼▼▼ チャット機能を追加 ▼▼▼ -->
+        <div class="card" style="margin-top: 16px; flex-grow: 1; display: flex; flex-direction: column;">
+          <strong data-i18n-key="chat-title">チャット</strong>
+          <div id="chat-messages" class="chat-messages custom-scrollbar" style="flex-grow: 1;">
+            <!-- メッセージは動的に生成 -->
+          </div>
+          <div id="typing-indicator" class="typing-indicator"></div>
+          <div class="chat-input-area">
+            <input type="text" id="chat-username" class="input-text" placeholder="名前" style="flex-basis: 100px; flex-grow: 0;">
+            <input type="text" id="chat-message-input" class="input-text" placeholder="メッセージを入力...">
+            <button id="chat-send-btn" class="btn icon secondary" title="送信"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg></button>
+          </div>
+        </div>
+        <!-- ▲▲▲ チャット機能を追加 ▲▲▲ -->
       </aside>
     </div>
 
@@ -142,9 +164,14 @@
       </div>
     </div>
   </div>
+  <!-- Firebase SDK (バージョンは適宜最新のものに更新してください) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
   <!-- App Scripts -->
   <script src="Weapon-data.js"></script>
   <script src="i18n.js"></script>
+  <script src="firebase-sync.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

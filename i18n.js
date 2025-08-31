@@ -11,6 +11,10 @@ const translations = {
     'exit-fullscreen': '全画面表示を終了',
     'fullscreen-toggle': '全画面表示切り替え',
     'settings': '設定',
+    'room-share': 'リアルタイム共有中',
+    'copy-room-url': '共有URLをコピー',
+    'copy-room-url-success': 'URLをクリップボードにコピーしました！',
+    'chat-title': 'チャット',
 
     // Main Display
     'reset-display-name': '準備OK！',
@@ -111,6 +115,10 @@ const translations = {
     'exit-fullscreen': 'Exit Fullscreen',
     'fullscreen-toggle': 'Toggle Fullscreen',
     'settings': 'Settings',
+    'room-share': 'Real-time Sync Active',
+    'copy-room-url': 'Copy Share URL',
+    'copy-room-url-success': 'Copied the URL to clipboard!',
+    'chat-title': 'Chat',
 
     // Main Display
     'reset-display-name': 'Ready!',
