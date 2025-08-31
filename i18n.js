@@ -9,11 +9,12 @@ const translations = {
     'realtime-leave-btn': '退出する',
     'realtime-create-btn': 'ルーム作成',
     'realtime-creating-btn': '作成中...',
-    'realtime-error-create': 'ルームの作成に失敗しました。ネットワーク接続などを確認してください。',
-    'realtime-error-join': 'ルームへの参加に失敗しました。ネットワーク接続などを確認してください。',
+    'realtime-error-create': 'ルームの作成に失敗しました。',
+    'realtime-error-join': 'ルームへの参加に失敗しました。',
     'realtime-room-id': 'ルームID:',
     'realtime-host': 'ホスト',
     'realtime-error-connect': 'ルームに接続できませんでした。IDが正しいか確認してください。',
+    'realtime-you': 'あなた',
     'realtime-reconnecting': 'サーバーに再接続しています...',
 
     // Header & Controls
@@ -139,11 +140,12 @@ const translations = {
     'realtime-leave-btn': 'Leave Room',
     'realtime-create-btn': 'Create Room',
     'realtime-creating-btn': 'Creating...',
-    'realtime-error-create': 'Failed to create room. Please check your network connection.',
-    'realtime-error-join': 'Failed to join room. Please check your network connection.',
+    'realtime-error-create': 'Failed to create room.',
+    'realtime-error-join': 'Failed to join room.',
     'realtime-room-id': 'Room ID:',
     'realtime-host': 'Host',
     'realtime-error-connect': 'Could not connect to the room. Please check the ID and try again.',
+    'realtime-you': 'You',
     'realtime-reconnecting': 'Reconnecting to server...',
 
     // Header & Controls

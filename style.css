@@ -446,6 +446,36 @@ input:checked + .slider:before {
   font-size: 16px;
 }
 
+.player-item .player-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.player-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.btn-kick {
+  background: transparent;
+  border: 1px solid var(--muted);
+  color: var(--muted);
+  border-radius: 8px;
+  padding: 2px 8px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.btn-kick.block { border-color: var(--danger); color: var(--danger); }
+.btn-kick:hover { background: var(--accent); color: var(--btn-text); border-color: var(--accent); }
+.btn-kick.block:hover { background: var(--danger); color: var(--btn-text); border-color: var(--danger); }
+
+.my-indicator {
+  display: inline-block;
+  margin-left: 6px;
+}
+
 /* Realtime Controls */
 #realtime-controls {
   display: flex;

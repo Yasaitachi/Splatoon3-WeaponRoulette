@@ -8,8 +8,10 @@ const firebaseConfig = {
   projectId: "splatoon3-weponroulette",
   storageBucket: "splatoon3-weponroulette.firebasestorage.app",
   messagingSenderId: "198539626159",
-  appId: "1:198539626159:web:66631074abb597ab00f65a"
+  appId: "1:198539626159:web:6790cb5270add8bc00f65a"
 };
+// ▲▲▲ PASTE FIREBASE CONFIG HERE ▲▲▲
+
 
 // --- グローバル変数 ---------------------------------------------------------
 const APP_VERSION = '1.2.0'; // アプリケーションのバージョン。更新時にこの数値を変更する。
@@ -899,12 +901,15 @@ function updatePlayerList(players) {
     playerListEl.innerHTML = `<div class="empty" data-i18n-key="player-list-empty">${t('player-list-empty')}</div>`;
     return;
   }
-  playerListEl.innerHTML = players.map(player => `
+  playerListEl.innerHTML = players.map(player => {
+      const isMe = state.playerRef && player.id === state.playerRef.key;
+      const meIndicator = isMe ? ` <span class="my-indicator" title="${t('realtime-you')}">👤</span>` : '';
+      return `
       <div class="player-item">
-          <span>${player.name}</span>
+          <span>${player.name}${meIndicator}</span>
           ${player.isHost ? `<span class="host-icon" title="${t('realtime-host')}">👑</span>` : ''}
       </div>
-  `).join('');
+  `}).join('');
 }
 
 function addChatMessage(name, message, isSystem = false) {
@@ -1062,7 +1067,8 @@ async function createRoom() { // UIの状態を更新して、処理中である
     updateFiltersOnFirebase();
   } catch (error) {
     console.error("Error creating room:", error);
-    alert(t('realtime-error-create'));
+    const detail = error.code ? `(${error.code})` : `(${error.message})`;
+    alert(`${t('realtime-error-create')} ${detail}`);
     reEnableButtons();
   }
 }
@@ -1111,7 +1117,8 @@ async function joinRoom() {
     listenToRoomChanges();
   } catch (error) {
     console.error("Error joining room:", error);
-    alert(t('realtime-error-join'));
+    const detail = error.code ? `(${error.code})` : `(${error.message})`;
+    alert(`${t('realtime-error-join')} ${detail}`);
     reEnableButtons();
   }
 }
