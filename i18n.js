@@ -1,5 +1,22 @@
 const translations = {
   ja: {
+    // Realtime
+    'realtime-title': 'リアルタイム連携',
+    'realtime-player-name-placeholder': 'オンラインプレイで表示される名前',
+    'realtime-join-placeholder': '12桁のルームID', // 修正済み
+    'realtime-join-btn': '参加',
+    'realtime-joining-btn': '参加中...',
+    'realtime-leave-btn': '退出する',
+    'realtime-create-btn': 'ルーム作成',
+    'realtime-creating-btn': '作成中...',
+    'realtime-error-create': 'ルームの作成に失敗しました。',
+    'realtime-error-join': 'ルームへの参加に失敗しました。',
+    'realtime-room-id': 'ルームID:',
+    'realtime-host': 'ホスト',
+    'realtime-error-connect': 'ルームに接続できませんでした。IDが正しいか確認してください。',
+    'realtime-you': 'あなた',
+    'realtime-reconnecting': 'サーバーに再接続しています...',
+
     // Header & Controls
     'app-title': 'スプラ3 ブキルーレット',
     'spin': '回す',
@@ -11,15 +28,6 @@ const translations = {
     'exit-fullscreen': '全画面表示を終了',
     'fullscreen-toggle': '全画面表示切り替え',
     'settings': '設定',
-    'room-share': 'リアルタイム共有中',
-    'copy-room-url': '共有URLをコピー',
-    'copy-room-url-success': 'URLをクリップボードにコピーしました！',
-    'lobby-title': 'ブキルーレットへようこそ！',
-    'lobby-desc': '友達とリアルタイムでルーレットを楽しむには、部屋を作成するか、既存の部屋に参加してください。',
-    'lobby-create-room': '新しい部屋を作る',
-    'lobby-join-placeholder': '部屋IDを入力...',
-    'lobby-join-room': '参加する',
-    'chat-title': 'チャット',
 
     // Main Display
     'reset-display-name': '準備OK！',
@@ -34,6 +42,7 @@ const translations = {
     'no-candidates-alert': '重複なしモードですが、抽選対象のブキが{poolCount}種類しかなく、プレイヤー数({playerCount}人)に足りません。',
     'no-candidates-alert-title': '抽選対象のブキがありません。フィルター設定を確認してください。',
     'error': 'エラー',
+    'player-name-required': 'オンライン機能を利用するにはプレイヤー名を入力してください。',
     'error-failed-draw': '抽選に失敗しました。',
     'error-copy-failed': 'クリップボードへのコピーに失敗しました。',
     'error-loading-weapons': 'ブキデータの読み込みに失敗しました。',
@@ -50,6 +59,19 @@ const translations = {
     'history-count-value': '{batches}回 ({total}ブキ)',
     'history-empty': 'まだ履歴がありません',
     'history-delete-item': 'この項目を削除',
+
+    // Player List & Chat
+    'player-list-title': '参加者',
+    'player-list-count': '{count}人',
+    'player-list-empty': '参加者がいません',
+    'chat-title': 'チャット',
+    'chat-placeholder': 'メッセージを入力',
+    'chat-send-btn': '送信',
+
+    // System Messages
+    'system-new-host': '{name}さんが新しいホストになりました。',
+    'system-player-joined': '{name}さんが参加しました。',
+    'system-player-left': '{name}さんが退出しました。',
 
     // Probability Table
     'prob-title': '各ブキの排出確率',
@@ -109,6 +131,23 @@ const translations = {
     'footer-text': 'このツールは<a href="https://github.com/Yasaitachi/Splatoon3-WeaponRoulette" target="_blank" class="link">GitHub</a>にて無料で公開しています。',
   },
   en: {
+    // Realtime
+    'realtime-title': 'Real-time Sync',
+    'realtime-player-name-placeholder': 'Name used for online play',
+    'realtime-join-placeholder': '12-digit Room ID', // Corrected
+    'realtime-join-btn': 'Join',
+    'realtime-joining-btn': 'Joining...',
+    'realtime-leave-btn': 'Leave Room',
+    'realtime-create-btn': 'Create Room',
+    'realtime-creating-btn': 'Creating...',
+    'realtime-error-create': 'Failed to create room.',
+    'realtime-error-join': 'Failed to join room.',
+    'realtime-room-id': 'Room ID:',
+    'realtime-host': 'Host',
+    'realtime-error-connect': 'Could not connect to the room. Please check the ID and try again.',
+    'realtime-you': 'You',
+    'realtime-reconnecting': 'Reconnecting to server...',
+
     // Header & Controls
     'app-title': 'Splatoon 3 Weapon Roulette',
     'spin': 'Spin',
@@ -120,15 +159,6 @@ const translations = {
     'exit-fullscreen': 'Exit Fullscreen',
     'fullscreen-toggle': 'Toggle Fullscreen',
     'settings': 'Settings',
-    'room-share': 'Real-time Sync Active',
-    'copy-room-url': 'Copy Share URL',
-    'copy-room-url-success': 'Copied the URL to clipboard!',
-    'lobby-title': 'Welcome to the Weapon Roulette!',
-    'lobby-desc': 'To enjoy the roulette in real-time with friends, create a new room or join an existing one.',
-    'lobby-create-room': 'Create a New Room',
-    'lobby-join-placeholder': 'Enter Room ID...',
-    'lobby-join-room': 'Join',
-    'chat-title': 'Chat',
 
     // Main Display
     'reset-display-name': 'Ready!',
@@ -143,6 +173,7 @@ const translations = {
     'no-candidates-alert': 'No-duplicate mode is on, but the pool only has {poolCount} weapon(s), which is not enough for {playerCount} player(s).',
     'no-candidates-alert-title': 'There are no weapons to draw from. Please check your filter settings.',
     'error': 'Error',
+    'player-name-required': 'Please enter a player name to use online features.',
     'error-failed-draw': 'Failed to draw a weapon.',
     'error-copy-failed': 'Failed to copy result to clipboard.',
     'error-loading-weapons': 'Failed to load weapon data.',
@@ -159,6 +190,19 @@ const translations = {
     'history-count-value': '{batches} draws ({total} weapons)',
     'history-empty': 'No history yet',
     'history-delete-item': 'Delete this item',
+
+    // Player List & Chat
+    'player-list-title': 'Participants',
+    'player-list-count': '{count} players',
+    'player-list-empty': 'No one is in the room yet.',
+    'chat-title': 'Chat',
+    'chat-placeholder': 'Type a message',
+    'chat-send-btn': 'Send',
+
+    // System Messages
+    'system-new-host': '{name} is the new host.',
+    'system-player-joined': '{name} has joined.',
+    'system-player-left': '{name} has left.',
 
     // Probability Table
     'prob-title': 'Probability of each weapon',
