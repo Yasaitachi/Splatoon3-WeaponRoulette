@@ -1401,16 +1401,18 @@ function setRealtimeUiState(uiState) {
     }
     hostBadge.style.display = (uiState === 'in_room_host') ? 'inline-block' : 'none';
     playerNameInput.disabled = inRoom;
-    // スピンボタンは、ルーム内ではホストのみ、ローカルでは常に有効
-    if (inRoom) {
-      spinBtn.disabled = (uiState !== 'in_room_host');
-    } else {
-      spinBtn.disabled = false;
-    }
 
-    // フィルターUIの有効/無効を切り替え
-    $$('#classFilters input, #classFilters button, #noRepeat').forEach(el => {
-      el.disabled = isViewer;
+    // isViewerは、ルーム内の視聴者である場合にtrue。ローカルモードやホストの場合はfalse。
+    // これを使ってホスト専用コントロールの有効/無効を一括で設定する。
+    const disableHostControls = isViewer;
+
+    // ホスト専用コントロール（スピン、リセット、人数設定、重複なし）
+    $$('.host-control button, .host-control input').forEach(el => {
+      el.disabled = disableHostControls;
+    });
+    // フィルターUI
+    $$('#classFilters input, #classFilters button').forEach(el => {
+      el.disabled = disableHostControls;
     });
 }
 
