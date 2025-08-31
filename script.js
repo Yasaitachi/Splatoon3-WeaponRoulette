@@ -974,28 +974,36 @@ function applyFiltersFromFirebase(filters) {
 // --- リアルタイム連携 (Firebase) ------------------------------------
 
 function initFirebase() {
-  if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
+  try {
+    if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
     console.warn("Firebase is not configured. Real-time features will be disabled.");
     setRealtimeUiState('error');
     return;
   }
-  firebase.initializeApp(firebaseConfig);
-  state.db = firebase.database();
-  setRealtimeUiState('disconnected');
+    // Prevent re-initialization
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
+    }
+    state.db = firebase.database();
+    setRealtimeUiState('disconnected');
 
-  // URLからルームIDを読み取って自動参加
-  const params = new URLSearchParams(window.location.search);
-  const roomIdFromUrl = params.get('room');
-  if (roomIdFromUrl) {
-    roomIdInput.value = roomIdFromUrl;
-    // 少し待ってから参加処理を開始
-    setTimeout(() => {
-      if (playerNameInput.value.trim()) {
-        joinRoomBtn.click();
-      } else {
-        alert(t('player-name-required'));
-      }
-    }, 500);
+    // URLからルームIDを読み取って自動参加
+    const params = new URLSearchParams(window.location.search);
+    const roomIdFromUrl = params.get('room');
+    if (roomIdFromUrl) {
+      roomIdInput.value = roomIdFromUrl;
+      // 少し待ってから参加処理を開始
+      setTimeout(() => {
+        if (playerNameInput.value.trim()) {
+          joinRoomBtn.click();
+        } else {
+          alert(t('player-name-required'));
+        }
+      }, 500);
+    }
+  } catch (error) {
+    console.error("Firebase initialization failed:", error);
+    setRealtimeUiState('error');
   }
 }
 
