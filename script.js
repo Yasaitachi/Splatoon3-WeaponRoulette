@@ -1,14 +1,40 @@
-// --- グローバル変数 ---------------------------------------------------------
+// --- Firebase Configuration -----------------------------------------------
 
+// ▼▼▼ PASTE FIREBASE CONFIG HERE ▼▼▼
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyCasaRCxU26RD8Dvnzs4pT1uKgbX0MJgr8",
+  authDomain: "splatoon3-weponroulette.firebaseapp.com",
+  projectId: "splatoon3-weponroulette",
+  storageBucket: "splatoon3-weponroulette.firebasestorage.app",
+  messagingSenderId: "198539626159",
+  appId: "1:198539626159:web:66631074abb597ab00f65a"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+// --- グローバル変数 ---------------------------------------------------------
 const APP_VERSION = '1.1.2'; // アプリケーションのバージョン。更新時にこの数値を変更する。
 const RESET_TIMEOUT_MS = 10000; // 10秒
 const state = {
   running: false,
-  timer: null,
+  resetTimer: null,
   pool: [],
   history: [],
   lastPick: null,
   interval: 50,
+  // Firebase state
+  db: null,
+  roomRef: null,
+  playerRef: null,
+  roomId: null,
+  isHost: false,
+  playerName: '',
   lang: 'ja',
   theme: 'system',
 };
@@ -30,6 +56,22 @@ const fullscreenBtn = $('#fullscreenBtn');
 const settingsBtn = $('#settingsBtn');
 const settingsModal = $('#settingsModal');
 const closeSettingsBtn = $('#closeSettingsBtn');
+const createRoomBtn = $('#createRoomBtn');
+const joinRoomBtn = $('#joinRoomBtn');
+const roomIdInput = $('#roomIdInput');
+const roomJoinUi = $('#room-join-ui');
+const roomInfoUi = $('#room-info-ui');
+const roomIdDisplay = $('#roomIdDisplay');
+const hostBadge = $('#host-badge');
+const leaveRoomBtn = $('#leaveRoomBtn');
+const playerNameInput = $('#playerNameInput');
+const playerListContainer = $('#player-list-container');
+const playerListEl = $('#player-list');
+const playerCountDisplay = $('#playerCountDisplay');
+const chatContainer = $('#chat-container');
+const chatMessagesEl = $('#chat-messages');
+const chatInput = $('#chatInput');
+const chatSendBtn = $('#chatSendBtn');
 
 // --- アプリケーションロジック ----------------------------------------------
 
@@ -152,9 +194,10 @@ function setControlsDisabled(disabled) {
 /**
  * 1人分の抽選アニメーションを実行し、結果のブキオブジェクトを返す
  * @param {Array} pool - 抽選対象のブキ配列
+ * @param {Object|null} finalPickOverride - 最終的に選択されるべきブキ（サーバーから指定）
  * @returns {Promise<Object|null>} - 抽選されたブキオブジェクト
  */
-function runSingleAnimation(pool) {
+function runSingleAnimation(pool, finalPickOverride = null) {
     return new Promise((resolve) => {
         if (!pool || pool.length === 0) {
             resolve(null);
@@ -184,7 +227,8 @@ function runSingleAnimation(pool) {
                 interval = 40 + progress * 180;
 
                 if (progress >= 1) {
-                    const finalPick = lastPickForAnim ?? pickRandom(pool);
+                    // サーバーから指定されたブキがあればそれを、なければ最後のアニメーションのブキを最終結果とする
+                    const finalPick = finalPickOverride ?? lastPickForAnim ?? pickRandom(pool);
                     resolve(finalPick);
                 } else {
                     requestAnimationFrame(tick);
@@ -201,8 +245,7 @@ function runSingleAnimation(pool) {
  * 抽選処理のメインフロー
  */
 async function performDraw() {
-  if (state.running) return;
-  clearTimeout(showFinalResult.resetTimer); // 実行中のタイマーをクリア
+  if (state.running || !state.isHost || !state.roomRef) return;
 
   updatePool();
   const playerCount = parseInt(playerCountInput.value, 10);
@@ -215,66 +258,95 @@ async function performDraw() {
     return;
   }
 
-  state.running = true;
-  setControlsDisabled(true);
-
+  // 抽選をクライアントサイドで行う
   const finalResults = [];
   const tempPool = [...state.pool];
-  const drawTime = new Date().toISOString(); // この抽選グループのユニークID
-
-  if (playerCount === 1) {
-    const result = await runSingleAnimation(tempPool);
+  for (let i = 0; i < playerCount; i++) {
+    if (tempPool.length === 0) break;
+    const result = pickRandom(tempPool);
     if (result) {
-      finalResults.push(result); // 履歴に追加
-      pushHistoryItem(result, drawTime, 1, 1);
-      await showFinalResult([result]); // 最終結果として表示
-    }
-  } else {
-    for (let i = 0; i < playerCount; i++) {
-      resultContainer.innerHTML = `
-        <div id="resultName" class="name">${t('player-draw', { playerNum: i + 1 })}</div>
-        <div id="resultDetails" class="details">${t('player-draw-wait')}</div>
-      `;
-      await new Promise(resolve => setTimeout(resolve, 1200));
-
-      const result = await runSingleAnimation(tempPool);
-      if (!result) break;
-
-      pushHistoryItem(result, drawTime, i + 1, playerCount);
-      await showFinalResult([result]); // 中間結果を一時的に表示
-      await new Promise(resolve => setTimeout(resolve, 1500)); // 結果表示のためのポーズ
-
       finalResults.push(result);
       if (noRepeat.checked) {
         const index = tempPool.findIndex(item => item.name === result.name);
         if (index > -1) tempPool.splice(index, 1);
       }
     }
-    // 複数人プレイの場合、最後に全結果をリスト表示
-    if (finalResults.length > 0) {
-      await showFinalResult(finalResults);
-    }
+  }
+
+  // 結果をFirebaseに書き込む
+  state.roomRef.child('spinResult').set({
+    finalResults: finalResults,
+    pool: state.pool, // アニメーション用に元のプールも渡す
+    timestamp: firebase.database.ServerValue.TIMESTAMP
+  });
+}
+
+/**
+ * サーバーから受信した抽選結果を画面に表示する
+ * @param {Array<Object>} finalResults - 抽選結果のブキ配列
+ * @param {Array<Object>} serverPool - 抽選に使われたプール
+ */
+async function displaySpinResult(finalResults, serverPool) {
+  if (state.running) return;
+  clearTimeout(state.resetTimer);
+
+  state.running = true;
+  setControlsDisabled(true);
+
+  const playerCount = finalResults.length;
+  const drawTime = new Date().toISOString();
+
+  if (playerCount === 1) {
+      const result = finalResults[0];
+      await runSingleAnimation(serverPool, result);
+      pushHistoryItem(result, drawTime, 1, 1);
+      await showFinalResult([result]);
+  } else {
+      for (let i = 0; i < playerCount; i++) {
+          resultContainer.innerHTML = `
+              <div id="resultName" class="name">${t('player-draw', { playerNum: i + 1 })}</div>
+              <div id="resultDetails" class="details">${t('player-draw-wait')}</div>
+          `;
+          await new Promise(resolve => setTimeout(resolve, 1200));
+
+          const result = finalResults[i];
+          if (!result) break;
+
+          await runSingleAnimation(serverPool, result);
+          pushHistoryItem(result, drawTime, i + 1, playerCount);
+          await showFinalResult([result]);
+          await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+      if (finalResults.length > 0) {
+          await showFinalResult(finalResults);
+      }
   }
 
   if (finalResults.length > 0) {
-    saveHistory(); // すべての抽選が終わった後に履歴を保存
+      saveHistory();
 
-    // Discord Webhookで送信
-    await sendToDiscord(finalResults);
+      // Discord Webhook送信はホストのみが行う
+      if (state.isHost) {
+          await sendToDiscord(finalResults);
+      }
+      // クリップボードへのコピーは全員が行う
+      if ($('#autoCopy')?.checked) {
+          await copyResultToClipboard(finalResults);
+      }
 
-    // 抽選が成功した場合にのみ、リセットタイマーを設定
-    showFinalResult.resetTimer = setTimeout(() => {
-      resultContainer.innerHTML = `
+      state.resetTimer = setTimeout(() => {
+          resultContainer.innerHTML = `
         <div id="resultName" class="name" data-i18n-key="reset-display-name">${t('reset-display-name')}</div>
         <div id="resultDetails" class="details" data-i18n-key="reset-display-class">${t('reset-display-class')}</div>
       `;
-    }, RESET_TIMEOUT_MS);
+      }, RESET_TIMEOUT_MS);
   }
 
   state.running = false;
   setControlsDisabled(false);
   updatePool();
 }
+
 
 function startSpin() {
   performDraw();
@@ -348,6 +420,31 @@ async function showFinalResult(results) {
     }
   }
 }
+
+/**
+ * 抽選結果をクリップボードにコピーする
+ * @param {Array<Object>} results - 抽選結果のブキオブジェクトの配列
+ */
+async function copyResultToClipboard(results) {
+  if (!results || results.length === 0) return;
+
+  const textToCopy = results.map((w, i) => {
+    const playerLabel = results.length > 1 ? `${t('player-result-list', { i: i + 1 })}: ` : '';
+    const weaponName = getWeaponName(w);
+    const details = `${t(w.class)} / ${t(w.sub)} / ${t(w.sp)}`;
+    return `${playerLabel}${weaponName}\n${details}`;
+  }).join('\n\n');
+
+  try {
+    await navigator.clipboard.writeText(textToCopy);
+    console.log('Result copied to clipboard.');
+    // TODO: 将来的に「コピーしました」というトースト通知などを追加するとより親切
+  } catch (err) {
+    console.error('Failed to copy result to clipboard:', err);
+    alert(t('error-copy-failed'));
+  }
+}
+
 
 /**
  * 抽選結果をDiscord Webhookに送信する
@@ -443,8 +540,7 @@ async function sendToDiscord(results) {
 
 function resetAll() {
   state.running = false;
-  state.timer && clearInterval(state.timer);
-  clearTimeout(showFinalResult.resetTimer);
+  clearTimeout(state.resetTimer);
 
   state.history = [];
   noRepeat.checked = false;
@@ -531,6 +627,7 @@ function saveSettings() {
       webhookUrl: $('#webhookUrl')?.value ?? '',
       webhookTemplate: $('#webhookTemplate')?.value ?? '',
       webhookMentions: $('#webhookMentions')?.value ?? '',
+      autoCopy: $('#autoCopy')?.checked ?? false,
     };
     localStorage.setItem('splaRouletteSettings', JSON.stringify(settings));
   } catch (e) {
@@ -565,6 +662,10 @@ function loadAndApplySettings() {
     const webhookMentions = $('#webhookMentions');
     if (webhookMentions) {
       webhookMentions.value = settings.webhookMentions ?? '';
+    }
+    const autoCopy = $('#autoCopy');
+    if (autoCopy) {
+      autoCopy.checked = settings.autoCopy ?? false;
     }
     toggleWebhookUrlState(); // Webhook設定のUI状態を更新
   } catch (e) {
@@ -720,45 +821,226 @@ async function testDiscordWebhook() {
   }
 }
 
-function buildWebhookSettingsUI() {
-  const modalBody = settingsModal?.querySelector('.modal-body');
-  if (!modalBody) {
-    console.warn('Settings modal body not found, skipping Webhook UI creation.');
+function updatePlayerList(players) {
+  playerCountDisplay.textContent = t('player-list-count', { count: players.length });
+  if (!players || players.length === 0) {
+    playerListEl.innerHTML = `<div class="empty" data-i18n-key="player-list-empty">${t('player-list-empty')}</div>`;
+    return;
+  }
+  playerListEl.innerHTML = players.map(player => `
+      <div class="player-item">
+          <span>${player.name}</span>
+          ${player.isHost ? `<span class="host-icon" title="${t('realtime-host')}">👑</span>` : ''}
+      </div>
+  `).join('');
+}
+
+function addChatMessage(name, message, isSystem = false) {
+  const messageEl = document.createElement('div');
+  messageEl.className = isSystem ? 'chat-message system' : 'chat-message';
+
+  const nameEl = document.createElement('strong');
+  nameEl.textContent = name;
+
+  const textEl = document.createElement('span');
+  textEl.textContent = message;
+
+  if (!isSystem) {
+    messageEl.append(nameEl, textEl);
+  } else {
+    messageEl.append(textEl);
+  }
+  chatMessagesEl.appendChild(messageEl);
+  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+}
+
+// --- リアルタイム連携 (Firebase) ------------------------------------
+
+function initFirebase() {
+  if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+    console.warn("Firebase is not configured. Real-time features will be disabled.");
+    setRealtimeUiState('error');
+    return;
+  }
+  firebase.initializeApp(firebaseConfig);
+  state.db = firebase.database();
+  setRealtimeUiState('disconnected');
+
+  // URLからルームIDを読み取って自動参加
+  const params = new URLSearchParams(window.location.search);
+  const roomIdFromUrl = params.get('room');
+  if (roomIdFromUrl) {
+    roomIdInput.value = roomIdFromUrl;
+    // 少し待ってから参加処理を開始
+    setTimeout(() => {
+      if (playerNameInput.value.trim()) {
+        joinRoomBtn.click();
+      } else {
+        alert('参加するにはプレイヤー名を入力してください。');
+      }
+    }, 500);
+  }
+}
+
+function createRoom() {
+  const name = playerNameInput.value.trim();
+  if (!name) {
+    alert(t('player-name-required'));
+    return;
+  }
+  state.playerName = name;
+
+  const roomsRef = state.db.ref('rooms');
+  state.roomRef = roomsRef.push({
+    createdAt: firebase.database.ServerValue.TIMESTAMP,
+    lastSpin: null
+  });
+  state.roomId = state.roomRef.key;
+
+  state.playerRef = state.roomRef.child('clients').push({
+    name: state.playerName,
+    joinedAt: firebase.database.ServerValue.TIMESTAMP
+  });
+  state.playerRef.onDisconnect().remove();
+
+  addChatMessage(null, `${state.playerName} がルームを作成しました。`, true);
+  listenToRoomChanges();
+}
+
+async function joinRoom() {
+  const name = playerNameInput.value.trim();
+  if (!name) {
+    alert(t('player-name-required'));
+    return;
+  }
+  const roomId = roomIdInput.value.trim().toUpperCase();
+  if (!roomId) return;
+
+  state.playerName = name;
+  state.roomId = roomId;
+  state.roomRef = state.db.ref(`rooms/${state.roomId}`);
+
+  const snapshot = await state.roomRef.once('value');
+  if (!snapshot.exists()) {
+    alert(t('realtime-error-connect')); // TODO: Better message
     return;
   }
 
-  const webhookSection = document.createElement('div');
-  webhookSection.className = 'settings-section';
-  webhookSection.innerHTML = `
-    <h3 data-i18n-key="settings-webhook-title">Discord Webhook連携</h3>
-    <p class="muted" data-i18n-key="settings-webhook-desc">抽選結果をDiscordチャンネルに自動で送信します。</p>
-    <div class="setting-item row">
-      <label for="webhookEnable" data-i18n-key="settings-webhook-enable">Webhookを有効にする</label>
-      <label class="toggle-switch">
-        <input type="checkbox" id="webhookEnable">
-        <span class="slider"></span>
-      </label>
-    </div>
-    <div id="webhookUrlContainer">
-      <div class="setting-item">
-        <label for="webhookUrl" data-i18n-key="settings-webhook-url">Webhook URL</label>
-        <input type="url" id="webhookUrl" placeholder="https://discord.com/api/webhooks/..." class="input-text">
-      </div>
-      <div class="setting-item">
-        <label for="webhookTemplate" data-i18n-key="settings-webhook-template">カスタムメッセージ</label>
-        <textarea id="webhookTemplate" class="input-text" rows="3" data-i18n-placeholder="settings-webhook-template-placeholder"></textarea>
-        <p class="muted small" data-i18n-key="settings-webhook-template-help" data-i18n-target="innerHTML"></p>
-      </div>
-      <div class="setting-item">
-        <label for="webhookMentions" data-i18n-key="settings-webhook-mentions"></label>
-        <input type="text" id="webhookMentions" class="input-text" data-i18n-placeholder="settings-webhook-mentions-placeholder">
-        <p class="muted small" data-i18n-key="settings-webhook-mentions-help"></p>
-      </div>
-      <button type="button" id="testWebhookBtn" class="btn secondary" data-i18n-key="settings-webhook-test-send">送信テスト</button>
-    </div>
-  `;
-  modalBody.appendChild(webhookSection);
+  state.playerRef = state.roomRef.child('clients').push({
+    name: state.playerName,
+    joinedAt: firebase.database.ServerValue.TIMESTAMP
+  });
+  state.playerRef.onDisconnect().remove();
+
+  addChatMessage(null, `${state.playerName} が参加しました。`, true);
+  listenToRoomChanges();
 }
+
+function listenToRoomChanges() {
+  if (!state.roomRef) return;
+
+  // 参加者リストの変更をリッスン
+  state.roomRef.child('clients').on('value', (snapshot) => {
+    const clients = snapshot.val() || {};
+    const playerArray = Object.entries(clients)
+      .sort(([, a], [, b]) => a.joinedAt - b.joinedAt)
+      .map(([key, val], index) => ({
+        id: key,
+        name: val.name,
+        isHost: index === 0
+      }));
+
+    updatePlayerList(playerArray);
+
+    const me = playerArray.find(p => p.id === state.playerRef.key);
+    if (me) {
+      const wasHost = state.isHost;
+      state.isHost = me.isHost;
+      if (state.isHost && !wasHost) {
+        alert(t('new-host-notification'));
+      }
+      setRealtimeUiState(state.isHost ? 'in_room_host' : 'in_room_viewer');
+    } else {
+      // 自分が見つからない = 退出した
+      handleLeaveRoom(false); // UIリセットのみ
+    }
+  });
+
+  // 抽選結果の変更をリッスン
+  state.roomRef.child('spinResult').on('value', (snapshot) => {
+    if (!snapshot.exists()) return;
+    const { finalResults, pool, timestamp } = snapshot.val();
+    // 自分の抽選より新しい結果のみ表示
+    if (timestamp > (state.lastSpinTimestamp || 0)) {
+      state.lastSpinTimestamp = timestamp;
+      displaySpinResult(finalResults, pool);
+    }
+  });
+
+  // チャットメッセージの追加をリッスン
+  state.roomRef.child('chat').on('child_added', (snapshot) => {
+    const { name, message, isSystem } = snapshot.val();
+    addChatMessage(name, message, isSystem);
+  });
+
+  roomIdDisplay.textContent = state.roomId;
+  const url = new URL(window.location);
+  url.searchParams.set('room', state.roomId);
+  window.history.pushState({}, '', url);
+}
+
+function setRealtimeUiState(uiState) {
+    const spinBtn = $('#spinBtn');
+    roomJoinUi.style.display = (uiState === 'disconnected' || uiState === 'error') ? 'flex' : 'none';
+    roomInfoUi.style.display = (uiState.startsWith('in_room')) ? 'flex' : 'none';
+    const inRoom = uiState.startsWith('in_room');
+    playerListContainer.style.display = inRoom ? 'block' : 'none';
+    chatContainer.style.display = inRoom ? 'block' : 'none';
+    if (uiState === 'disconnected') {
+      chatMessagesEl.innerHTML = '';
+    }
+    hostBadge.style.display = (uiState === 'in_room_host') ? 'inline-block' : 'none';
+    playerNameInput.disabled = inRoom;
+    spinBtn.disabled = (uiState !== 'in_room_host');
+}
+
+function handleLeaveRoom(removeFromDb = true) {
+  if (removeFromDb && state.playerRef) {
+    state.playerRef.onDisconnect().cancel();
+    state.playerRef.remove();
+    addChatMessage(null, `${state.playerName} が退出しました。`, true);
+  }
+
+  if (state.roomRef) {
+    state.roomRef.off(); // 全てのリスナーを解除
+  }
+
+  state.roomRef = null;
+  state.playerRef = null;
+  state.roomId = null;
+  state.isHost = false;
+  state.playerName = '';
+
+  setRealtimeUiState('disconnected');
+  updatePlayerList([]);
+
+  const url = new URL(window.location);
+  url.searchParams.delete('room');
+  window.history.pushState({}, '', url);
+}
+
+function sendChatMessage() {
+  const message = chatInput.value.trim();
+  if (message && state.roomRef) {
+    state.roomRef.child('chat').push({
+      name: state.playerName,
+      message: message,
+      timestamp: firebase.database.ServerValue.TIMESTAMP
+    });
+    chatInput.value = '';
+  }
+}
+
 
 // --- 初期化とイベントリスナー設定 ------------------------------------
 
@@ -803,6 +1085,19 @@ function setupEventListeners() {
   $('#resetBtn').addEventListener('click', resetAll);
   playerCountInput.addEventListener('change', saveSettings);
 
+  // Realtime controls
+  createRoomBtn.addEventListener('click', createRoom);
+  joinRoomBtn.addEventListener('click', joinRoom);
+  roomIdDisplay.addEventListener('click', () => navigator.clipboard.writeText(state.roomId));
+  leaveRoomBtn.addEventListener('click', handleLeaveRoom);
+  chatSendBtn.addEventListener('click', sendChatMessage);
+  chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      sendChatMessage();
+    }
+  });
+
+
   fullscreenBtn?.addEventListener('click', toggleFullscreen);
   document.addEventListener('fullscreenchange', updateFullscreenButton);
 
@@ -823,6 +1118,7 @@ function setupEventListeners() {
   $('#webhookUrl')?.addEventListener('input', saveSettings);
   $('#webhookTemplate')?.addEventListener('input', saveSettings);
   $('#webhookMentions')?.addEventListener('input', saveSettings);
+  $('#autoCopy')?.addEventListener('change', saveSettings);
   $('#testWebhookBtn')?.addEventListener('click', testDiscordWebhook);
 
   systemThemeListener.addEventListener('change', handleSystemThemeChange);
@@ -903,10 +1199,16 @@ function init() {
   }
 
   buildFilterUI();
-  buildWebhookSettingsUI();
   loadAndApplySettings();
   loadHistory();
   updatePool();
+  const savedName = localStorage.getItem('splaRoulettePlayerName');
+  if (savedName) {
+    playerNameInput.value = savedName;
+  }
+  playerNameInput.addEventListener('input', () => localStorage.setItem('splaRoulettePlayerName', playerNameInput.value));
+
+  initFirebase();
   setupEventListeners();
   // Initial UI text update is handled by loadAndApplySettings -> setLanguage
 }

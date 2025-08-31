@@ -1,5 +1,15 @@
 const translations = {
   ja: {
+    // Realtime
+    'realtime-title': 'リアルタイム連携',
+    'realtime-join-placeholder': 'ルームIDを入力',
+    'realtime-join-btn': '参加',
+    'realtime-create-btn': 'ルーム作成',
+    'realtime-room-id': 'ルームID:',
+    'realtime-host': 'ホスト',
+    'realtime-join-notification': 'ルームに参加しました。ホストが抽選を開始するのを待っています。',
+    'realtime-error-connect': 'サーバーとの接続に失敗しました。ページをリロードしてください。',
+
     // Header & Controls
     'app-title': 'スプラ3 ブキルーレット',
     'spin': '回す',
@@ -26,6 +36,7 @@ const translations = {
     'no-candidates-alert-title': '抽選対象のブキがありません。フィルター設定を確認してください。',
     'error': 'エラー',
     'error-failed-draw': '抽選に失敗しました。',
+    'error-copy-failed': 'クリップボードへのコピーに失敗しました。',
     'error-loading-weapons': 'ブキデータの読み込みに失敗しました。',
 
     // Filters
@@ -53,6 +64,9 @@ const translations = {
     // Settings Modal
     'settings-title': '設定',
     'settings-close': '設定を閉じる',
+    'settings-general-title': '一般設定',
+    'settings-auto-copy': '結果をクリップボードに自動コピー',
+    'settings-auto-copy-help': '抽選完了後、結果をテキスト形式でクリップボードにコピーします。',
     'settings-theme': 'テーマ',
     'settings-theme-light': 'ライト',
     'settings-theme-dark': 'ダーク',
@@ -94,6 +108,16 @@ const translations = {
     'footer-text': 'このツールは<a href="https://github.com/Yasaitachi/Splatoon3-WeaponRoulette" target="_blank" class="link">GitHub</a>にて無料で公開しています。',
   },
   en: {
+    // Realtime
+    'realtime-title': 'Real-time Sync',
+    'realtime-join-placeholder': 'Enter Room ID',
+    'realtime-join-btn': 'Join',
+    'realtime-create-btn': 'Create Room',
+    'realtime-room-id': 'Room ID:',
+    'realtime-host': 'Host',
+    'realtime-join-notification': 'Joined the room. Waiting for the host to start the draw.',
+    'realtime-error-connect': 'Failed to connect to the server. Please reload the page.',
+
     // Header & Controls
     'app-title': 'Splatoon 3 Weapon Roulette',
     'spin': 'Spin',
@@ -120,6 +144,7 @@ const translations = {
     'no-candidates-alert-title': 'There are no weapons to draw from. Please check your filter settings.',
     'error': 'Error',
     'error-failed-draw': 'Failed to draw a weapon.',
+    'error-copy-failed': 'Failed to copy result to clipboard.',
     'error-loading-weapons': 'Failed to load weapon data.',
 
     // Filters
@@ -147,6 +172,9 @@ const translations = {
     // Settings Modal
     'settings-title': 'Settings',
     'settings-close': 'Close settings',
+    'settings-general-title': 'General Settings',
+    'settings-auto-copy': 'Auto-copy result to clipboard',
+    'settings-auto-copy-help': 'After a draw is complete, automatically copy the result as text to the clipboard.',
     'settings-theme': 'Theme',
     'settings-theme-light': 'Light',
     'settings-theme-dark': 'Dark',

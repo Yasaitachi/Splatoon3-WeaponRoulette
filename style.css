@@ -51,13 +51,21 @@ body {
 }
 .app { width: min(1100px, 100%); }
 header { display:flex; gap:14px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
+.header-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  width: 100%;
+  gap: 16px;
+}
 h1 { margin: 0; font-size: clamp(20px, 3vw, 28px); letter-spacing: .02em; }
 .card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 18px; padding: 16px; box-shadow: var(--card-shadow);
 }
-.controls { display:flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.controls { display:flex; gap: 12px; align-items: center; flex-wrap: wrap; width: 100%; justify-content: center; }
 .btn {
   appearance: none; border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 700;
   background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: var(--btn-text);
@@ -364,3 +372,109 @@ input:checked + .slider:before {
   flex-direction: column;
   gap: 1rem;
 }
+
+.settings-section + .settings-section {
+  padding-top: 20px;
+  border-top: 1px solid var(--card-border);
+}
+
+/* スクロールバーの非表示 */
+.custom-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.custom-scrollbar::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari, Opera */
+}
+
+/* Chat */
+.chat-messages {
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px;
+}
+.chat-message {
+  font-size: 14px;
+  line-height: 1.4;
+}
+.chat-message strong {
+  margin-right: 6px;
+  color: var(--accent);
+}
+.chat-input-area {
+  display: flex;
+  gap: 8px;
+}
+.chat-input-area .input-text {
+  flex-grow: 1;
+}
+
+/* Player List */
+.player-list {
+  max-height: 200px;
+  overflow-y: auto;
+}
+.player-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--history-item-bg);
+}
+.player-item + .player-item {
+  margin-top: 6px;
+}
+.host-icon {
+  font-size: 16px;
+}
+
+/* Realtime Controls */
+.realtime-container {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 8px 12px;
+}
+#player-name-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#room-join-ui { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+#realtime-controls .input-text {
+  width: 120px;
+  padding: 6px 10px;
+  font-size: 14px;
+}
+#realtime-controls .btn {
+  padding: 6px 12px;
+  font-size: 14px;
+}
+#realtime-controls {
+  border: none;
+  padding: 0;
+  gap: 12px;
+}
+#room-info-ui {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Make room for the leave button */
+  flex-grow: 1;
+}
+#leaveRoomBtn {
+  margin-left: auto;
+  padding: 6px 12px;
+  font-size: 14px;
+}
+#roomIdDisplay { font-weight: bold; background: rgba(0,0,0,.2); padding: 2px 6px; border-radius: 4px; user-select: all; cursor: pointer; }
+#host-badge { padding: 2px 8px; font-size: 10px; }
