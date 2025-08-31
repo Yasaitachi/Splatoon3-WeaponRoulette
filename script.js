@@ -926,9 +926,7 @@ function updatePlayerList(players) {
       if (state.isHost && !player.isHost) {
           adminControls = `
             <div class="player-actions">
-                <button class="btn-kick" data-action="kick" data-player-id="${player.id}" data-player-name="${player.name}" title="${t('realtime-kick-player')}">${t('realtime-kick-player')}</button>
-                <button class="btn-kick block" data-action="block" data-player-id="${player.id}" data-player-name="${player.name}" title="${t('realtime-block-player')}">${t('realtime-block-player')}</button>
-                <button class="btn-kick ban" data-action="ban" data-player-id="${player.id}" data-player-name="${player.name}" title="${t('realtime-ban-player')}">${t('realtime-ban-player')}</button>
+                <button class="btn-kick menu" data-action="admin-menu" data-player-id="${player.id}" data-player-name="${player.name}" title="${t('realtime-admin-menu')}">︙</button>
             </div>
           `;
       }
@@ -1040,6 +1038,36 @@ function initFirebase() {
   } catch (error) {
     console.error("Firebase initialization failed:", error);
     setRealtimeUiState('error');
+  }
+}
+
+function showAdminMenu(targetButton) {
+  closeAdminMenu(); // Close any other open menu
+
+  const { playerId, playerName } = targetButton.dataset;
+  const menu = document.createElement('div');
+  menu.className = 'admin-menu';
+  menu.id = 'active-admin-menu';
+  // Store which button opened this menu to handle toggling
+  menu.dataset.openerPlayerId = playerId; 
+
+  menu.innerHTML = `
+    <button class="admin-menu-item" data-action="kick" data-player-id="${playerId}" data-player-name="${playerName}">${t('realtime-kick-player')}</button>
+    <button class="admin-menu-item block" data-action="block" data-player-id="${playerId}" data-player-name="${playerName}">${t('realtime-block-player')}</button>
+    <button class="admin-menu-item ban" data-action="ban" data-player-id="${playerId}" data-player-name="${playerName}">${t('realtime-ban-player')}</button>
+  `;
+
+  document.body.appendChild(menu);
+
+  const rect = targetButton.getBoundingClientRect();
+  menu.style.top = `${rect.bottom + window.scrollY + 2}px`;
+  menu.style.left = `${rect.right + window.scrollX - menu.offsetWidth}px`;
+}
+
+function closeAdminMenu() {
+  const existingMenu = document.getElementById('active-admin-menu');
+  if (existingMenu) {
+    existingMenu.remove();
   }
 }
 
@@ -1434,19 +1462,46 @@ function setupEventListeners() {
     }
   });
 
-  playerListEl.addEventListener('click', (e) => {
-      const button = e.target.closest('[data-action]');
-      if (!button || !state.isHost) return;
+  // Admin menu and actions handler
+  document.addEventListener('click', (e) => {
+    const menuButton = e.target.closest('[data-action="admin-menu"]');
+    const menuItem = e.target.closest('.admin-menu-item');
+    const openMenu = document.getElementById('active-admin-menu');
 
-      const { action, playerId, playerName } = button.dataset;
+    // If a menu button is clicked
+    if (menuButton) {
+        e.stopPropagation();
+        if (!state.isHost) return;
 
-      if (action === 'kick' && confirm(t('realtime-kick-confirm', { name: playerName }))) {
-          kickPlayer(playerId, playerName);
-      } else if (action === 'block' && confirm(t('realtime-block-confirm', { name: playerName }))) {
-          blockPlayer(playerId, playerName);
-      } else if (action === 'ban' && confirm(t('realtime-ban-confirm', { name: playerName }))) {
-          banPlayer(playerId, playerName);
-      }
+        // If a menu is open for this button, close it. Otherwise, open it.
+        if (openMenu && openMenu.dataset.openerPlayerId === menuButton.dataset.playerId) {
+            closeAdminMenu();
+        } else {
+            showAdminMenu(menuButton);
+        }
+        return;
+    }
+
+    // If a menu item is clicked
+    if (menuItem) {
+        if (!state.isHost) return;
+        const { action, playerId, playerName } = menuItem.dataset;
+        
+        if (action === 'kick') {
+            if (confirm(t('realtime-kick-confirm', { name: playerName }))) kickPlayer(playerId, playerName);
+        } else if (action === 'block') {
+            if (confirm(t('realtime-block-confirm', { name: playerName }))) blockPlayer(playerId, playerName);
+        } else if (action === 'ban') {
+            if (confirm(t('realtime-ban-confirm', { name: playerName }))) banPlayer(playerId, playerName);
+        }
+        closeAdminMenu();
+        return;
+    }
+
+    // If clicked anywhere else, close the menu
+    if (openMenu && !e.target.closest('.admin-menu')) {
+        closeAdminMenu();
+    }
   });
 
   fullscreenBtn?.addEventListener('click', toggleFullscreen);
