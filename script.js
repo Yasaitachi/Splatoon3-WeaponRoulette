@@ -69,12 +69,6 @@ const chatContainer = $('#chat-container');
 const chatMessagesEl = $('#chat-messages');
 const chatInput = $('#chatInput');
 const chatSendBtn = $('#chatSendBtn');
-const findRoomBtn = $('#findRoomBtn');
-const publicRoomCheckbox = $('#publicRoomCheckbox');
-const roomListModal = $('#roomListModal');
-const closeRoomListBtn = $('#closeRoomListBtn');
-const roomListTableBody = $('#roomListTableBody');
-const roomListEmpty = $('#room-list-empty');
 const loaderOverlay = $('#loader-overlay');
 
 // --- アプリケーションロジック ----------------------------------------------
@@ -1185,7 +1179,6 @@ async function createRoom() { // UIの状態を更新して、処理中である
       createdAt: firebase.database.ServerValue.TIMESTAMP,
       lastActivity: firebase.database.ServerValue.TIMESTAMP,
       lastSpin: null,
-      public: publicRoomCheckbox.checked,
       host: state.playerName,
     });
 
@@ -1589,13 +1582,6 @@ function setupEventListeners() {
     }
   });
 
-  // Room List Modal Listeners
-  findRoomBtn.addEventListener('click', showRoomList);
-  closeRoomListBtn.addEventListener('click', closeRoomListModal);
-  roomListModal.addEventListener('click', (e) => {
-    if (e.target === roomListModal) closeRoomListModal();
-  });
-
   // Admin menu and actions handler
   document.addEventListener('click', (e) => {
     const menuButton = e.target.closest('[data-action="admin-menu"]');
@@ -1767,12 +1753,5 @@ function init() {
     state.playerName = playerNameInput.value;
   });
 }
-
-// グローバルスコープに関数を公開
-window.joinRoomById = (id) => {
-  roomIdInput.value = id;
-  closeRoomListModal();
-  joinRoom();
-};
 
 init();
