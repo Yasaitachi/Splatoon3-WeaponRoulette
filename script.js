@@ -1008,6 +1008,12 @@ function initFirebase() {
 }
 
 async function createRoom() { // UIの状態を更新して、処理中であることをユーザーにフィードバック
+  if (!state.db) {
+    alert("データベースに接続できません。ページをリロードして再度お試しください。");
+    console.error("Firebase Database is not initialized. state.db is null.");
+    return;
+  }
+
   createRoomBtn.disabled = true;
   joinRoomBtn.disabled = true;
   createRoomBtn.textContent = t('realtime-creating-btn');
@@ -1454,15 +1460,15 @@ function init() {
   setupEventListeners();
   loadAndApplySettings();
 
+  // Firebaseを常に初期化して、いつでもルーム作成・参加ができるようにする
+  initFirebase();
+
   const params = new URLSearchParams(window.location.search);
-  if (params.has('room')) {
-    // Online mode
-    initFirebase();
-  } else {
-    // Local mode
+  if (!params.has('room')) {
+    // URLにルームIDがない場合（＝ローカルモードで起動した場合）、
+    // ローカルの履歴を読み込む
     loadHistory();
     updatePool();
-    setRealtimeUiState('disconnected');
   }
 
   const savedName = localStorage.getItem('splaRoulettePlayerName') || '';
