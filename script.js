@@ -1,10 +1,10 @@
 // --- Firebase Configuration -----------------------------------------------
 
 // ▼▼▼ PASTE FIREBASE CONFIG HERE ▼▼▼
-// Your web app's Firebase configuration
 const firebaseConfig = {
   apiKey: "AIzaSyCasaRCxU26RD8Dvnzs4pT1uKgbX0MJgr8",
   authDomain: "splatoon3-weponroulette.firebaseapp.com",
+  databaseURL: "https://splatoon3-weponroulette-default-rtdb.firebaseio.com",
   projectId: "splatoon3-weponroulette",
   storageBucket: "splatoon3-weponroulette.firebasestorage.app",
   messagingSenderId: "198539626159",
@@ -12,7 +12,7 @@ const firebaseConfig = {
 };
 
 // --- グローバル変数 ---------------------------------------------------------
-const APP_VERSION = '1.1.2'; // アプリケーションのバージョン。更新時にこの数値を変更する。
+const APP_VERSION = '1.2.0'; // アプリケーションのバージョン。更新時にこの数値を変更する。
 const RESET_TIMEOUT_MS = 10000; // 10秒
 const state = {
   running: false,
@@ -56,7 +56,6 @@ const roomJoinUi = $('#room-join-ui');
 const roomInfoUi = $('#room-info-ui');
 const roomIdDisplay = $('#roomIdDisplay');
 const hostBadge = $('#host-badge');
-const leaveRoomBtn = $('#leaveRoomBtn');
 const playerNameInput = $('#playerNameInput');
 const playerListContainer = $('#player-list-container');
 const playerListEl = $('#player-list');
@@ -125,23 +124,34 @@ function pushHistoryItem(weapon, batchTime, playerNum, totalPlayers) {
 }
 
 function renderHistory() {
-  const totalItems = state.history.length;
-  const batchIds = new Set(state.history.map(h => h.time));
+  const isOnline = !!state.roomRef;
+  const historyArray = [...state.history].sort((a, b) => a.time.localeCompare(b.time));
+  const totalItems = historyArray.length;
+  const batchIds = new Set(historyArray.map(h => h.time));
   historyCount.textContent = t('history-count-value', { batches: batchIds.size, total: totalItems });
 
   if (!totalItems) {
     historyEl.innerHTML = `<div class="empty" data-i18n-key="history-empty">${t('history-empty')}</div>`;
     return;
   }
-  historyEl.innerHTML = state.history.map((h, index) => {
+  historyEl.innerHTML = historyArray.map((h, index) => {
     const time = new Date(h.time);
     
     // 同じ回の抽選は線で区切る
-    const isNewBatch = (index === 0) || (h.time !== state.history[index - 1].time);
+    const isNewBatch = (index === 0) || (h.time !== historyArray[index - 1].time);
     const batchClass = isNewBatch && index > 0 ? 'new-batch-separator' : '';
 
     // 複数人プレイの場合のみプレイヤー番号を表示
     const playerLabel = h.totalPlayers > 1 ? `P${h.playerNum}: ` : '';
+
+    let deleteButton = '';
+    if (isOnline && state.isHost) {
+        deleteButton = `<button class="btn secondary icon" data-delete-key="${h.key}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>`;
+    } else if (!isOnline) {
+        // ローカルモードではインデックスで削除
+        const localIndex = state.history.findIndex(localItem => localItem.time === h.time && localItem.name === h.name);
+        deleteButton = `<button class="btn secondary icon" data-delete-index="${localIndex}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>`;
+    }
 
     return `
       <div class="history-item ${batchClass}">
@@ -153,7 +163,7 @@ function renderHistory() {
           <div class="history-item__meta muted">
             <div>${time.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}</div>
           </div>
-          <button class="btn secondary icon" data-delete-index="${index}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>
+          ${deleteButton}
         </div>
       </div>
     `;
@@ -163,13 +173,29 @@ function renderHistory() {
 }
 
 function handleDeleteHistoryItem(e) {
-  const target = e.target.closest('[data-delete-index]');
+  const target = e.target.closest('[data-delete-key], [data-delete-index]');
   if (!target) return;
-  const index = parseInt(target.getAttribute('data-delete-index'), 10);
-  state.history.splice(index, 1);
-  renderHistory();
-  saveHistory();
-  updatePool();
+
+  // Online mode: host can delete by key
+  if (state.roomRef && state.isHost) {
+    const key = target.dataset.deleteKey;
+    if (key) {
+      state.roomRef.child('history').child(key).remove();
+      // The 'value' listener on history will re-render.
+      return;
+    }
+  }
+
+  // Local mode: delete by index
+  if (!state.roomRef) {
+    const index = parseInt(target.dataset.deleteIndex, 10);
+    if (!isNaN(index)) {
+      state.history.splice(index, 1);
+      renderHistory();
+      saveHistory();
+      updatePool();
+    }
+  }
 }
 
 function pickRandom(arr) {
@@ -178,7 +204,7 @@ function pickRandom(arr) {
 
 function setControlsDisabled(disabled) {
   // 全画面ボタンはルーレット実行中も操作可能にするため、無効化の対象から除外する
-  $$('.controls button:not(#fullscreenBtn), .controls input, #history button').forEach(c => {
+  $$('.controls button:not(#fullscreenBtn), .controls input, #history button, #resetBtn').forEach(c => {
     c.disabled = disabled;
   });
   $$('#classFilters input').forEach(c => c.disabled = disabled);
@@ -266,29 +292,11 @@ function getDrawResults() {
 }
 
 /**
- * オンライン抽選を実行し、結果をFirebaseに送信する（ホスト専用）
- */
-async function performDraw() {
-  if (state.running || !state.isHost || !state.roomRef) return;
-
-  updatePool();
-  const finalResults = getDrawResults();
-  if (!finalResults) return;
-
-  // 結果をFirebaseに書き込む
-  state.roomRef.child('spinResult').set({
-    finalResults: finalResults,
-    pool: state.pool, // アニメーション用に元のプールも渡す
-    timestamp: firebase.database.ServerValue.TIMESTAMP
-  });
-}
-
-/**
- * サーバーから受信した抽選結果を画面に表示する
+ * 抽選結果を画面に表示する
  * @param {Array<Object>} finalResults - 抽選結果のブキ配列
- * @param {Array<Object>} serverPool - 抽選に使われたプール
+ * @param {Array<Object>} pool - 抽選に使われたプール
  */
-async function displaySpinResult(finalResults, serverPool) {
+async function displaySpinResult(finalResults, pool) {
   if (state.running) return;
   clearTimeout(state.resetTimer);
 
@@ -296,12 +304,11 @@ async function displaySpinResult(finalResults, serverPool) {
   setControlsDisabled(true);
 
   const playerCount = finalResults.length;
-  const drawTime = new Date().toISOString();
+  const isOnline = !!state.roomRef;
 
   if (playerCount === 1) {
       const result = finalResults[0];
-      await runSingleAnimation(serverPool, result);
-      pushHistoryItem(result, drawTime, 1, 1);
+      await runSingleAnimation(pool, result);
       await showFinalResult([result]);
   } else {
       for (let i = 0; i < playerCount; i++) {
@@ -314,8 +321,7 @@ async function displaySpinResult(finalResults, serverPool) {
           const result = finalResults[i];
           if (!result) break;
 
-          await runSingleAnimation(serverPool, result);
-          pushHistoryItem(result, drawTime, i + 1, playerCount);
+          await runSingleAnimation(pool, result);
           await showFinalResult([result]);
           await new Promise(resolve => setTimeout(resolve, 1500));
       }
@@ -325,13 +331,31 @@ async function displaySpinResult(finalResults, serverPool) {
   }
 
   if (finalResults.length > 0) {
-      saveHistory();
-
-      // Discord Webhook送信はホストのみが行う
-      if (state.isHost) {
+      const drawTime = new Date().toISOString();
+      if (isOnline) {
+          // Online mode: only host writes history and sends notifications
+          if (state.isHost) {
+              const historyRef = state.roomRef.child('history');
+              for (let i = 0; i < finalResults.length; i++) {
+                  const result = finalResults[i];
+                  historyRef.push({
+                      ...result,
+                      time: drawTime,
+                      playerNum: i + 1,
+                      totalPlayers: finalResults.length,
+                  });
+              }
+              await sendToDiscord(finalResults);
+          }
+      } else {
+          // Local mode: update local history and save
+          for (let i = 0; i < finalResults.length; i++) {
+              pushHistoryItem(finalResults[i], drawTime, i + 1, finalResults.length);
+          }
+          saveHistory();
           await sendToDiscord(finalResults);
       }
-      // クリップボードへのコピーは全員が行う
+
       if ($('#autoCopy')?.checked) {
           await copyResultToClipboard(finalResults);
       }
@@ -349,6 +373,20 @@ async function displaySpinResult(finalResults, serverPool) {
   updatePool();
 }
 
+async function performDraw() {
+  if (state.running || !state.isHost || !state.roomRef) return;
+
+  updatePool();
+  const finalResults = getDrawResults();
+  if (!finalResults) return;
+
+  // 結果をFirebaseに書き込む
+  state.roomRef.child('spinResult').set({
+    finalResults: finalResults,
+    pool: state.pool, // アニメーション用に元のプールも渡す
+    timestamp: firebase.database.ServerValue.TIMESTAMP
+  });
+}
 
 async function startSpin() {
   if (state.running) return;
@@ -558,10 +596,17 @@ function resetAll() {
   state.running = false;
   clearTimeout(state.resetTimer);
 
-  state.history = [];
   noRepeat.checked = false;
   
   $$('#classFilters input[type="checkbox"]').forEach(i => i.checked = true);
+
+  if (state.isHost && state.roomRef) {
+    state.roomRef.child('history').remove();
+  } else if (!state.roomRef) { // ローカルモードの場合のみ
+    state.history = [];
+    renderHistory();
+    saveHistory();
+  }
 
   resultContainer.innerHTML = `
     <div id="resultName" class="name" data-i18n-key="reset-display-name">${t('reset-display-name')}</div>
@@ -569,9 +614,7 @@ function resetAll() {
   `;
   
   updatePool();
-  renderHistory();
   saveSettings();
-  saveHistory();
 }
 
 function renderProbTable() {
@@ -870,10 +913,55 @@ function addChatMessage(name, message, isSystem = false) {
   chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
 }
 
+/**
+ * 現在のフィルター設定をFirebaseに保存する（ホスト専用）
+ */
+function updateFiltersOnFirebase() {
+  if (!state.isHost || !state.roomRef) return;
+
+  const filters = {
+    class: $$('input[data-class]').reduce((acc, cb) => ({ ...acc, [cb.dataset.class]: cb.checked }), {}),
+    sub: $$('input[data-sub]').reduce((acc, cb) => ({ ...acc, [cb.dataset.sub]: cb.checked }), {}),
+    sp: $$('input[data-sp]').reduce((acc, cb) => ({ ...acc, [cb.dataset.sp]: cb.checked }), {}),
+    noRepeat: noRepeat.checked,
+  };
+
+  state.roomRef.child('filters').set(filters);
+}
+
+/**
+ * Firebaseから取得したフィルター設定をUIに適用する（視聴者専用）
+ * @param {Object} filters - Firebaseから取得したフィルター設定
+ */
+function applyFiltersFromFirebase(filters) {
+  if (!filters || state.isHost) return;
+
+  // 各フィルターのチェックボックスの状態を更新
+  if (filters.class) {
+    $$('input[data-class]').forEach(cb => {
+      if (filters.class[cb.dataset.class] !== undefined) cb.checked = filters.class[cb.dataset.class];
+    });
+  }
+  if (filters.sub) {
+    $$('input[data-sub]').forEach(cb => {
+      if (filters.sub[cb.dataset.sub] !== undefined) cb.checked = filters.sub[cb.dataset.sub];
+    });
+  }
+  if (filters.sp) {
+    $$('input[data-sp]').forEach(cb => {
+      if (filters.sp[cb.dataset.sp] !== undefined) cb.checked = filters.sp[cb.dataset.sp];
+    });
+  }
+
+  if (filters.noRepeat !== undefined) noRepeat.checked = filters.noRepeat;
+
+  updatePool();
+}
+
 // --- リアルタイム連携 (Firebase) ------------------------------------
 
 function initFirebase() {
-  if (firebaseConfig.apiKey === "YOUR_API_KEY") {
+  if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
     console.warn("Firebase is not configured. Real-time features will be disabled.");
     setRealtimeUiState('error');
     return;
@@ -892,7 +980,7 @@ function initFirebase() {
       if (playerNameInput.value.trim()) {
         joinRoomBtn.click();
       } else {
-        alert('参加するにはプレイヤー名を入力してください。');
+        alert(t('player-name-required'));
       }
     }, 500);
   }
@@ -919,8 +1007,9 @@ function createRoom() {
   });
   state.playerRef.onDisconnect().remove();
 
-  addChatMessage(null, `${state.playerName} がルームを作成しました。`, true);
   listenToRoomChanges();
+  // ルーム作成時に現在のフィルター状態を書き込む
+  updateFiltersOnFirebase();
 }
 
 async function joinRoom() {
@@ -938,7 +1027,7 @@ async function joinRoom() {
 
   const snapshot = await state.roomRef.once('value');
   if (!snapshot.exists()) {
-    alert(t('realtime-error-connect')); // TODO: Better message
+    alert(t('realtime-error-connect'));
     return;
   }
 
@@ -948,16 +1037,25 @@ async function joinRoom() {
   });
   state.playerRef.onDisconnect().remove();
 
-  addChatMessage(null, `${state.playerName} が参加しました。`, true);
   listenToRoomChanges();
 }
 
 function listenToRoomChanges() {
   if (!state.roomRef) return;
 
+  let previousPlayers = {};
+  let isInitialLoad = true;
+
   // 参加者リストの変更をリッスン
   state.roomRef.child('clients').on('value', (snapshot) => {
     const clients = snapshot.val() || {};
+
+    if (!isInitialLoad && state.isHost) {
+      handlePlayerChanges(clients, previousPlayers);
+    }
+    previousPlayers = clients;
+    isInitialLoad = false;
+
     const playerArray = Object.entries(clients)
       .sort(([, a], [, b]) => a.joinedAt - b.joinedAt)
       .map(([key, val], index) => ({
@@ -968,12 +1066,17 @@ function listenToRoomChanges() {
 
     updatePlayerList(playerArray);
 
-    const me = playerArray.find(p => p.id === state.playerRef.key);
+    const me = playerArray.find(p => p.id === state.playerRef?.key);
     if (me) {
       const wasHost = state.isHost;
       state.isHost = me.isHost;
-      if (state.isHost && !wasHost) {
-        alert(t('new-host-notification'));
+      if (state.isHost && !wasHost && playerArray.length > 1) {
+        state.roomRef.child('chat').push({
+          name: null,
+          message: t('system-new-host', { name: me.name }),
+          isSystem: true,
+          timestamp: firebase.database.ServerValue.TIMESTAMP
+        });
       }
       setRealtimeUiState(state.isHost ? 'in_room_host' : 'in_room_viewer');
     } else {
@@ -999,17 +1102,60 @@ function listenToRoomChanges() {
     addChatMessage(name, message, isSystem);
   });
 
+  // フィルター情報の変更をリッスン（視聴者のみ）
+  state.roomRef.child('filters').on('value', (snapshot) => {
+    if (snapshot.exists()) {
+      applyFiltersFromFirebase(snapshot.val());
+    }
+  });
+
+  // 履歴の変更をリッスン
+  state.roomRef.child('history').on('value', (snapshot) => {
+      const historyData = snapshot.val() || {};
+      state.history = Object.entries(historyData).map(([key, value]) => ({
+          ...value,
+          key: key,
+      }));
+      renderHistory();
+      updatePool();
+  });
+
   roomIdDisplay.textContent = state.roomId;
   const url = new URL(window.location);
   url.searchParams.set('room', state.roomId);
   window.history.pushState({}, '', url);
 }
 
+function handlePlayerChanges(currentPlayers, previousPlayers) {
+  if (!state.roomRef) return;
+  const currentPlayerIds = Object.keys(currentPlayers);
+  const previousPlayerIds = Object.keys(previousPlayers);
+
+  const newPlayerIds = currentPlayerIds.filter(id => !previousPlayerIds.includes(id));
+  newPlayerIds.forEach(id => {
+    if (currentPlayers[id]) {
+      const message = t('system-player-joined', { name: currentPlayers[id].name });
+      state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    }
+  });
+
+  const leftPlayerIds = previousPlayerIds.filter(id => !currentPlayerIds.includes(id));
+  leftPlayerIds.forEach(id => {
+    if (previousPlayers[id]) {
+      const message = t('system-player-left', { name: previousPlayers[id].name });
+      state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    }
+  });
+}
+
+// --- リアルタイム連携 (Firebase) ------------------------------------
+
 function setRealtimeUiState(uiState) {
     const spinBtn = $('#spinBtn');
     roomJoinUi.style.display = (uiState === 'disconnected' || uiState === 'error') ? 'flex' : 'none';
     roomInfoUi.style.display = (uiState.startsWith('in_room')) ? 'flex' : 'none';
     const inRoom = uiState.startsWith('in_room');
+    const isViewer = uiState === 'in_room_viewer';
     playerListContainer.style.display = inRoom ? 'block' : 'none';
     chatContainer.style.display = inRoom ? 'block' : 'none';
     if (uiState === 'disconnected') {
@@ -1023,6 +1169,11 @@ function setRealtimeUiState(uiState) {
     } else {
       spinBtn.disabled = false;
     }
+
+    // フィルターUIの有効/無効を切り替え
+    $$('#classFilters input, #classFilters button, #noRepeat').forEach(el => {
+      el.disabled = isViewer;
+    });
 }
 
 function handleLeaveRoom(removeFromDb = true) {
@@ -1110,14 +1261,12 @@ function setupEventListeners() {
   createRoomBtn.addEventListener('click', createRoom);
   joinRoomBtn.addEventListener('click', joinRoom);
   roomIdDisplay.addEventListener('click', () => navigator.clipboard.writeText(state.roomId));
-  leaveRoomBtn.addEventListener('click', handleLeaveRoom);
   chatSendBtn.addEventListener('click', sendChatMessage);
   chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       sendChatMessage();
     }
   });
-
 
   fullscreenBtn?.addEventListener('click', toggleFullscreen);
   document.addEventListener('fullscreenchange', updateFullscreenButton);
@@ -1144,11 +1293,7 @@ function setupEventListeners() {
 
   systemThemeListener.addEventListener('change', handleSystemThemeChange);
 
-  historyEl.addEventListener('click', e => {
-    if (e.target.closest('[data-delete-index]')) {
-      handleDeleteHistoryItem(e);
-    }
-  });
+  historyEl.addEventListener('click', handleDeleteHistoryItem);
 
   function createFilterChangeHandler(selector) {
     return function(e) {
@@ -1160,18 +1305,25 @@ function setupEventListeners() {
       }
       updatePool();
       saveSettings();
+      if (state.isHost) {
+        updateFiltersOnFirebase();
+      }
     };
   }
 
   $('#classFilters').addEventListener('change', e => {
-    if (e.target.matches('input[data-class]')) createFilterChangeHandler('input[data-class]')(e);
-    if (e.target.matches('input[data-sub]')) createFilterChangeHandler('input[data-sub]')(e);
-    if (e.target.matches('input[data-sp]')) createFilterChangeHandler('input[data-sp]')(e);
+    const target = e.target;
+    if (target.matches('input[data-class]')) createFilterChangeHandler('input[data-class]')(e);
+    if (target.matches('input[data-sub]')) createFilterChangeHandler('input[data-sub]')(e);
+    if (target.matches('input[data-sp]')) createFilterChangeHandler('input[data-sp]')(e);
   });
 
   noRepeat.addEventListener('change', () => {
     updatePool();
     saveSettings();
+    if (state.isHost) {
+      updateFiltersOnFirebase();
+    }
   });
 
   $('#classFilters').addEventListener('click', e => {
@@ -1194,12 +1346,13 @@ function init() {
   // --- バージョンチェックと強制リロード ---
   // ローカルに保存されたバージョンと現在のアプリバージョンを比較
   const savedVersion = localStorage.getItem('splaRouletteVersion');
-  if (savedVersion && savedVersion !== APP_VERSION) {
+  if (savedVersion && savedVersion !== APP_VERSION) { // バージョンが異なったらデータをクリアしてリロード
     // バージョンが異なる場合、互換性のない変更によるエラーを防ぐため、
     // 古い設定と履歴をクリアしてページを強制的にリロードする。
     console.log(`App updated from ${savedVersion} to ${APP_VERSION}. Clearing data and reloading.`);
     localStorage.removeItem('splaRouletteSettings');
     localStorage.removeItem('splaRouletteHistory');
+    localStorage.removeItem('splaRoulettePlayerName');
     localStorage.setItem('splaRouletteVersion', APP_VERSION); // 新しいバージョンを保存
     location.reload(true); // キャッシュを無視してリロード
     return; // リロードするため、以降の初期化処理は中断
@@ -1220,18 +1373,26 @@ function init() {
   }
 
   buildFilterUI();
-  loadAndApplySettings();
-  loadHistory();
-  updatePool();
-  const savedName = localStorage.getItem('splaRoulettePlayerName');
-  if (savedName) {
-    playerNameInput.value = savedName;
-  }
-  playerNameInput.addEventListener('input', () => localStorage.setItem('splaRoulettePlayerName', playerNameInput.value));
-
-  initFirebase();
   setupEventListeners();
-  // Initial UI text update is handled by loadAndApplySettings -> setLanguage
+  loadAndApplySettings();
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('room')) {
+    // Online mode
+    initFirebase();
+  } else {
+    // Local mode
+    loadHistory();
+    updatePool();
+    setRealtimeUiState('disconnected');
+  }
+
+  const savedName = localStorage.getItem('splaRoulettePlayerName') || '';
+  playerNameInput.value = savedName;
+  playerNameInput.addEventListener('input', () => {
+    localStorage.setItem('splaRoulettePlayerName', playerNameInput.value);
+    state.playerName = playerNameInput.value;
+  });
 }
 
 init();

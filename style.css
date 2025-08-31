@@ -51,21 +51,27 @@ body {
 }
 .app { width: min(1100px, 100%); }
 header { display:flex; gap:14px; align-items: center; justify-content: space-between; flex-wrap: wrap; }
-.header-main {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  width: 100%;
-  gap: 16px;
-}
 h1 { margin: 0; font-size: clamp(20px, 3vw, 28px); letter-spacing: .02em; }
 .card {
   background: var(--card-bg);
   border: 1px solid var(--card-border);
   border-radius: 18px; padding: 16px; box-shadow: var(--card-shadow);
 }
-.controls { display:flex; gap: 12px; align-items: center; flex-wrap: wrap; width: 100%; justify-content: center; }
+.main-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 16px;
+  padding: 12px 16px;
+}
+.controls-divider {
+  width: 1px;
+  height: 24px;
+  background-color: var(--pill-border);
+  margin: 0 4px;
+}
 .btn {
   appearance: none; border: 0; border-radius: 12px; padding: 12px 18px; font-weight: 700;
   background: linear-gradient(90deg, var(--accent), var(--accent-2)); color: var(--btn-text);
@@ -94,7 +100,7 @@ h1 { margin: 0; font-size: clamp(20px, 3vw, 28px); letter-spacing: .02em; }
   padding: 0;
 }
 
-.layout { display:grid; grid-template-columns: 1.2fr .8fr; gap: 16px; margin-top: 16px; }
+.layout { display:grid; grid-template-columns: 1.2fr .8fr; gap: 16px; margin-top: 20px; }
 @media (max-width: 900px) { .layout { grid-template-columns: 1fr; } }
 
 /* Roulette display */
@@ -402,6 +408,12 @@ input:checked + .slider:before {
   font-size: 14px;
   line-height: 1.4;
 }
+.chat-message.system {
+  color: var(--muted);
+  font-style: italic;
+  text-align: center;
+  font-size: 12px;
+}
 .chat-message strong {
   margin-right: 6px;
   color: var(--accent);
@@ -424,7 +436,7 @@ input:checked + .slider:before {
   justify-content: space-between;
   align-items: center;
   padding: 8px 12px;
-  border-radius: 8px;
+  border-radius: 10px;
   background: var(--history-item-bg);
 }
 .player-item + .player-item {
@@ -435,46 +447,18 @@ input:checked + .slider:before {
 }
 
 /* Realtime Controls */
-.realtime-container {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-  border: 1px solid var(--card-border);
-  border-radius: 12px;
-  padding: 8px 12px;
-}
-#player-name-controls {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-#room-join-ui { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-#realtime-controls .input-text {
-  width: 120px;
-  padding: 6px 10px;
-  font-size: 14px;
-}
-#realtime-controls .btn {
-  padding: 6px 12px;
-  font-size: 14px;
-}
 #realtime-controls {
-  border: none;
-  padding: 0;
+  display: flex;
+  align-items: center;
   gap: 12px;
 }
-#room-info-ui {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  /* Make room for the leave button */
-  flex-grow: 1;
-}
-#leaveRoomBtn {
-  margin-left: auto;
-  padding: 6px 12px;
-  font-size: 14px;
-}
+#room-join-ui { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+#realtime-controls .input-text { padding: 6px 10px; font-size: 14px; }
+#realtime-controls #playerNameInput { width: 180px; }
+#realtime-controls #roomIdInput { width: 120px; }
+#realtime-controls .btn { padding: 6px 12px; font-size: 14px; }
+#room-info-ui { display: flex; align-items: center; gap: 8px; }
 #roomIdDisplay { font-weight: bold; background: rgba(0,0,0,.2); padding: 2px 6px; border-radius: 4px; user-select: all; cursor: pointer; }
 #host-badge { padding: 2px 8px; font-size: 10px; }
+.leave-room-container { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--card-border); }
+.leave-room-container .btn { width: 100%; }

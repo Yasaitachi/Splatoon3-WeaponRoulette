@@ -8,7 +8,7 @@ const translations = {
     'realtime-room-id': 'ルームID:',
     'realtime-host': 'ホスト',
     'realtime-join-notification': 'ルームに参加しました。ホストが抽選を開始するのを待っています。',
-    'realtime-error-connect': 'サーバーとの接続に失敗しました。ページをリロードしてください。',
+    'realtime-error-connect': 'ルームに接続できませんでした。IDが正しいか確認してください。',
 
     // Header & Controls
     'app-title': 'スプラ3 ブキルーレット',
@@ -35,6 +35,7 @@ const translations = {
     'no-candidates-alert': '重複なしモードですが、抽選対象のブキが{poolCount}種類しかなく、プレイヤー数({playerCount}人)に足りません。',
     'no-candidates-alert-title': '抽選対象のブキがありません。フィルター設定を確認してください。',
     'error': 'エラー',
+    'player-name-required': 'オンライン機能を利用するにはプレイヤー名を入力してください。',
     'error-failed-draw': '抽選に失敗しました。',
     'error-copy-failed': 'クリップボードへのコピーに失敗しました。',
     'error-loading-weapons': 'ブキデータの読み込みに失敗しました。',
@@ -52,6 +53,19 @@ const translations = {
     'history-empty': 'まだ履歴がありません',
     'history-delete-item': 'この項目を削除',
 
+    // Player List & Chat
+    'player-list-title': '参加者',
+    'player-list-count': '{count}人',
+    'player-list-empty': '参加者がいません',
+    'chat-title': 'チャット',
+    'chat-placeholder': 'メッセージを入力',
+    'chat-send-btn': '送信',
+
+    // System Messages
+    'system-new-host': '{name}さんが新しいホストになりました。',
+    'system-player-joined': '{name}さんが参加しました。',
+    'system-player-left': '{name}さんが退出しました。',
+
     // Probability Table
     'prob-title': '各ブキの排出確率',
     'prob-no-candidates': '対象ブキなし',
@@ -64,6 +78,9 @@ const translations = {
     // Settings Modal
     'settings-title': '設定',
     'settings-close': '設定を閉じる',
+    'settings-player-name-placeholder': 'オンラインプレイで表示される名前',
+
+    // General Settings
     'settings-general-title': '一般設定',
     'settings-auto-copy': '結果をクリップボードに自動コピー',
     'settings-auto-copy-help': '抽選完了後、結果をテキスト形式でクリップボードにコピーします。',
@@ -116,7 +133,7 @@ const translations = {
     'realtime-room-id': 'Room ID:',
     'realtime-host': 'Host',
     'realtime-join-notification': 'Joined the room. Waiting for the host to start the draw.',
-    'realtime-error-connect': 'Failed to connect to the server. Please reload the page.',
+    'realtime-error-connect': 'Could not connect to the room. Please check the ID and try again.',
 
     // Header & Controls
     'app-title': 'Splatoon 3 Weapon Roulette',
@@ -143,6 +160,7 @@ const translations = {
     'no-candidates-alert': 'No-duplicate mode is on, but the pool only has {poolCount} weapon(s), which is not enough for {playerCount} player(s).',
     'no-candidates-alert-title': 'There are no weapons to draw from. Please check your filter settings.',
     'error': 'Error',
+    'player-name-required': 'Please enter a player name to use online features.',
     'error-failed-draw': 'Failed to draw a weapon.',
     'error-copy-failed': 'Failed to copy result to clipboard.',
     'error-loading-weapons': 'Failed to load weapon data.',
@@ -160,6 +178,19 @@ const translations = {
     'history-empty': 'No history yet',
     'history-delete-item': 'Delete this item',
 
+    // Player List & Chat
+    'player-list-title': 'Participants',
+    'player-list-count': '{count} players',
+    'player-list-empty': 'No one is in the room yet.',
+    'chat-title': 'Chat',
+    'chat-placeholder': 'Type a message',
+    'chat-send-btn': 'Send',
+
+    // System Messages
+    'system-new-host': '{name} is the new host.',
+    'system-player-joined': '{name} has joined.',
+    'system-player-left': '{name} has left.',
+
     // Probability Table
     'prob-title': 'Probability of each weapon',
     'prob-no-candidates': 'No candidates',
@@ -172,6 +203,9 @@ const translations = {
     // Settings Modal
     'settings-title': 'Settings',
     'settings-close': 'Close settings',
+    'settings-player-name-placeholder': 'Name used for online play',
+
+    // General Settings
     'settings-general-title': 'General Settings',
     'settings-auto-copy': 'Auto-copy result to clipboard',
     'settings-auto-copy-help': 'After a draw is complete, automatically copy the result as text to the clipboard.',
