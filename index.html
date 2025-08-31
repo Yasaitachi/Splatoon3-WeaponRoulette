@@ -17,10 +17,14 @@
           <input type="text" id="roomIdInput" class="input-text" data-i18n-placeholder="realtime-join-placeholder" maxlength="12" pattern="[0-9]*" inputmode="numeric">
           <button id="joinRoomBtn" class="btn secondary" data-i18n-key="realtime-join-btn"></button>
           <span class="muted" style="margin: 0 4px;">or</span>
+          <input type="password" id="roomPasswordInput" class="input-text" data-i18n-placeholder="realtime-password-placeholder" maxlength="20">
           <button id="createRoomBtn" class="btn secondary" data-i18n-key="realtime-create-btn"></button>
         </div>
         <div id="room-info-ui" style="display: none;">
           <span data-i18n-key="realtime-room-id"></span> <code id="roomIdDisplay"></code>
+          <button id="copyRoomUrlBtn" class="btn secondary icon" data-i18n-title="realtime-copy-url-title">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.72"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.72-1.72"></path></svg>
+          </button>
           <span id="host-badge" class="pill" style="display:none;" data-i18n-key="realtime-host"></span>
           <button id="leaveRoomBtn" class="btn danger" data-i18n-key="realtime-leave-btn" style="padding: 4px 10px; font-size: 13px;">退出</button>
         </div>
