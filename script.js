@@ -941,23 +941,80 @@ function updatePlayerList(players) {
   `}).join('');
 }
 
-function addChatMessage(name, message, isSystem = false) {
+function addChatMessage(name, message, timestamp, isSystem = false) {
   const messageEl = document.createElement('div');
-  messageEl.className = isSystem ? 'chat-message system' : 'chat-message';
+  const isSelf = name === state.playerName && !isSystem;
+  messageEl.className = `chat-message ${isSystem ? 'system' : ''} ${isSelf ? 'self' : ''}`;
 
-  const nameEl = document.createElement('strong');
-  nameEl.textContent = name;
-
-  const textEl = document.createElement('span');
-  textEl.textContent = message;
-
-  if (!isSystem) {
-    messageEl.append(nameEl, textEl);
+  if (isSystem) {
+    messageEl.textContent = message;
   } else {
-    messageEl.append(textEl);
+    const time = timestamp ? new Date(timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
+    
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+
+    if (!isSelf) {
+      const authorEl = document.createElement('div');
+      authorEl.className = 'chat-author';
+      authorEl.textContent = name;
+      bubble.appendChild(authorEl);
+    }
+
+    const textEl = document.createElement('div');
+    textEl.className = 'chat-text';
+    textEl.textContent = message;
+    bubble.appendChild(textEl);
+
+    const timeEl = document.createElement('div');
+    timeEl.className = 'chat-timestamp';
+    timeEl.textContent = time;
+    bubble.appendChild(timeEl);
+
+    messageEl.appendChild(bubble);
   }
+
   chatMessagesEl.appendChild(messageEl);
   chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+}
+
+function renderTypingIndicator(typingUsers) {
+  const indicator = $('#typing-indicator');
+  if (!indicator) return;
+
+  // Filter out the current user
+  const otherTypingUsers = Object.values(typingUsers).filter(name => name !== state.playerName);
+  const count = otherTypingUsers.length;
+
+  if (count === 0) {
+    indicator.classList.remove('active');
+    indicator.innerHTML = '';
+    return;
+  }
+
+  let text;
+  if (count === 1) {
+    text = t('typing-single', { name: otherTypingUsers[0] });
+  } else if (count === 2) {
+    text = t('typing-two', { name1: otherTypingUsers[0], name2: otherTypingUsers[1] });
+  } else {
+    text = t('typing-multiple', { name1: otherTypingUsers[0], name2: otherTypingUsers[1], count: count - 2 });
+  }
+
+  indicator.innerHTML = `${text}<span class="dots"><span>.</span><span>.</span><span>.</span></span>`;
+  indicator.classList.add('active');
+}
+
+function updateMyTypingStatus(isTyping) {
+  if (!state.roomRef || !state.playerRef) return;
+  const typingRef = state.roomRef.child('typing').child(state.playerRef.key);
+  clearTimeout(state.typingTimeout);
+  if (isTyping) {
+    typingRef.set(state.playerName);
+    state.typingTimeout = setTimeout(() => updateMyTypingStatus(false), 3000);
+  } else {
+    typingRef.remove();
+  }
 }
 
 /**
@@ -1145,6 +1202,7 @@ async function createRoom() { // UIの状態を更新して、処理中である
       ip: ip
     });
     state.playerRef.onDisconnect().remove();
+    state.roomRef.child('typing').child(state.playerRef.key).onDisconnect().remove();
 
     listenToRoomChanges();
     // ルーム作成時に現在のフィルター状態を書き込む
@@ -1217,6 +1275,7 @@ async function joinRoom() {
       ip: ip
     });
     state.playerRef.onDisconnect().remove();
+    state.roomRef.child('typing').child(state.playerRef.key).onDisconnect().remove();
 
     listenToRoomChanges();
   } catch (error) {
@@ -1287,8 +1346,8 @@ function listenToRoomChanges() {
 
   // チャットメッセージの追加をリッスン
   state.roomRef.child('chat').on('child_added', (snapshot) => {
-    const { name, message, isSystem } = snapshot.val();
-    addChatMessage(name, message, isSystem);
+    const { name, message, isSystem, timestamp } = snapshot.val();
+    addChatMessage(name, message, timestamp, isSystem);
   });
 
   // フィルター情報の変更をリッスン（視聴者のみ）
@@ -1307,6 +1366,12 @@ function listenToRoomChanges() {
       }));
       renderHistory();
       updatePool();
+  });
+
+  // Listen for typing indicators
+  state.roomRef.child('typing').on('value', (snapshot) => {
+    const typingUsers = snapshot.val() || {};
+    renderTypingIndicator(typingUsers);
   });
 
   roomIdDisplay.textContent = state.roomId;
@@ -1367,6 +1432,9 @@ function setRealtimeUiState(uiState) {
 
 function handleLeaveRoom(removeFromDb = true) {
   if (removeFromDb && state.playerRef) {
+    if (state.roomRef) {
+      state.roomRef.child('typing').child(state.playerRef.key).remove();
+    }
     state.playerRef.onDisconnect().cancel();
     state.playerRef.remove();
   }
@@ -1397,6 +1465,7 @@ function handleLeaveRoom(removeFromDb = true) {
 function sendChatMessage() {
   const message = chatInput.value.trim();
   if (message && state.roomRef) {
+    updateMyTypingStatus(false);
     state.roomRef.child('chat').push({
       name: state.playerName,
       message: message,
@@ -1459,6 +1528,11 @@ function setupEventListeners() {
   chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       sendChatMessage();
+    }
+  });
+  chatInput.addEventListener('input', () => {
+    if (state.roomRef) {
+      updateMyTypingStatus(true);
     }
   });
 

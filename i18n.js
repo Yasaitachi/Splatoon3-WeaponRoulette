@@ -11,10 +11,13 @@ const translations = {
     'realtime-creating-btn': '作成中...',
     'realtime-error-create': 'ルームの作成に失敗しました。',
     'realtime-error-join': 'ルームへの参加に失敗しました。',
+    'realtime-error-blocked': 'あなたはこのルームからブロックされています。',
+    'realtime-error-banned-ip': 'あなたはこのルームからBANされています。',
     'realtime-room-id': 'ルームID:',
     'realtime-host': 'ホスト',
     'realtime-error-connect': 'ルームに接続できませんでした。IDが正しいか確認してください。',
     'realtime-you': 'あなた',
+    'realtime-admin-menu': '管理メニュー',
     'realtime-reconnecting': 'サーバーに再接続しています...',
 
     // Header & Controls
@@ -66,12 +69,26 @@ const translations = {
     'player-list-empty': '参加者がいません',
     'chat-title': 'チャット',
     'chat-placeholder': 'メッセージを入力',
-    'chat-send-btn': '送信',
+    'chat-send-btn-title': '送信',
+    'realtime-kick-player': 'キック',
+    'realtime-block-player': 'ブロック',
+    'realtime-ban-player': 'BAN',
+    'realtime-kick-confirm': '{name}さんをルームから退出させますか？（再参加可能）',
+    'realtime-block-confirm': '{name}さんをブロックしますか？（同じ名前で再参加できなくなります）',
+    'realtime-ban-confirm': '{name}さんをBANしますか？（同じIPアドレスから再参加できなくなります）',
 
     // System Messages
     'system-new-host': '{name}さんが新しいホストになりました。',
     'system-player-joined': '{name}さんが参加しました。',
     'system-player-left': '{name}さんが退出しました。',
+    'system-player-kicked': '{name}さんが{host}さんによってキックされました。',
+    'system-player-blocked': '{name}さんが{host}さんによってブロックされました。',
+    'system-player-banned': '{name}さんが{host}さんによってBANされました。',
+
+    // Typing Indicator
+    'typing-single': '{name}が入力中です',
+    'typing-two': '{name1}と{name2}が入力中です',
+    'typing-multiple': '{name1}、{name2}、その他{count}人が入力中です',
 
     // Probability Table
     'prob-title': '各ブキの排出確率',
@@ -142,10 +159,13 @@ const translations = {
     'realtime-creating-btn': 'Creating...',
     'realtime-error-create': 'Failed to create room.',
     'realtime-error-join': 'Failed to join room.',
+    'realtime-error-blocked': 'You have been blocked from this room.',
+    'realtime-error-banned-ip': 'You have been banned from this room.',
     'realtime-room-id': 'Room ID:',
     'realtime-host': 'Host',
     'realtime-error-connect': 'Could not connect to the room. Please check the ID and try again.',
     'realtime-you': 'You',
+    'realtime-admin-menu': 'Admin Menu',
     'realtime-reconnecting': 'Reconnecting to server...',
 
     // Header & Controls
@@ -197,12 +217,26 @@ const translations = {
     'player-list-empty': 'No one is in the room yet.',
     'chat-title': 'Chat',
     'chat-placeholder': 'Type a message',
-    'chat-send-btn': 'Send',
+    'chat-send-btn-title': 'Send',
+    'realtime-kick-player': 'Kick',
+    'realtime-block-player': 'Block',
+    'realtime-ban-player': 'BAN',
+    'realtime-kick-confirm': 'Kick {name} from the room? (they can rejoin)',
+    'realtime-block-confirm': 'Block {name}? (they cannot rejoin with the same name)',
+    'realtime-ban-confirm': 'BAN {name}? (they cannot rejoin from the same IP address)',
 
     // System Messages
     'system-new-host': '{name} is the new host.',
     'system-player-joined': '{name} has joined.',
     'system-player-left': '{name} has left.',
+    'system-player-kicked': '{name} was kicked by {host}.',
+    'system-player-blocked': '{name} was blocked by {host}.',
+    'system-player-banned': '{name} was banned by {host}.',
+
+    // Typing Indicator
+    'typing-single': '{name} is typing',
+    'typing-two': '{name1} and {name2} are typing',
+    'typing-multiple': '{name1}, {name2}, and {count} others are typing',
 
     // Probability Table
     'prob-title': 'Probability of each weapon',

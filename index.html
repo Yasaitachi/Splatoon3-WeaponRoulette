@@ -97,9 +97,12 @@
         <div id="chat-container" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--card-border);">
           <strong data-i18n-key="chat-title">チャット</strong>
           <div id="chat-messages" class="chat-messages custom-scrollbar"></div>
+          <div id="typing-indicator" class="typing-indicator"></div>
           <div class="chat-input-area">
             <input type="text" id="chatInput" class="input-text" data-i18n-placeholder="chat-placeholder">
-            <button id="chatSendBtn" class="btn secondary" data-i18n-key="chat-send-btn">送信</button>
+            <button id="chatSendBtn" class="btn secondary icon" data-i18n-title="chat-send-btn-title" title="送信">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+            </button>
           </div>
         </div>
       </aside>
