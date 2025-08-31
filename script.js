@@ -1,17 +1,3 @@
-// --- Firebase Configuration -----------------------------------------------
-
-// ▼▼▼ PASTE FIREBASE CONFIG HERE ▼▼▼
-const firebaseConfig = {
-  apiKey: "AIzaSyCasaRCxU26RD8Dvnzs4pT1uKgbX0MJgr8",
-  authDomain: "splatoon3-weponroulette.firebaseapp.com",
-  databaseURL: "https://splatoon3-weponroulette-default-rtdb.firebaseio.com",
-  projectId: "splatoon3-weponroulette",
-  storageBucket: "splatoon3-weponroulette.firebasestorage.app",
-  messagingSenderId: "198539626159",
-  appId: "1:198539626159:web:6790cb5270add8bc00f65a"
-};
-// ▲▲▲ PASTE FIREBASE CONFIG HERE ▲▲▲
-
 
 // --- グローバル変数 ---------------------------------------------------------
 const APP_VERSION = '1.2.0'; // アプリケーションのバージョン。更新時にこの数値を変更する。
@@ -23,13 +9,6 @@ const state = {
   history: [],
   lastPick: null,
   interval: 50,
-  // Firebase state
-  db: null,
-  roomRef: null,
-  playerRef: null,
-  roomId: null,
-  isHost: false,
-  playerName: '',
   lang: 'ja',
   theme: 'system',
 };
@@ -51,43 +30,11 @@ const fullscreenBtn = $('#fullscreenBtn');
 const settingsBtn = $('#settingsBtn');
 const settingsModal = $('#settingsModal');
 const closeSettingsBtn = $('#closeSettingsBtn');
-const createRoomBtn = $('#createRoomBtn');
-const joinRoomBtn = $('#joinRoomBtn');
-const leaveRoomBtn = $('#leaveRoomBtn');
-const roomIdInput = $('#roomIdInput');
-const roomJoinUi = $('#room-join-ui');
-const roomInfoUi = $('#room-info-ui');
-const roomIdDisplay = $('#roomIdDisplay');
-const hostBadge = $('#host-badge');
-const playerNameInput = $('#playerNameInput');
-const playerListContainer = $('#player-list-container');
-const playerListEl = $('#player-list');
-const playerCountDisplay = $('#playerCountDisplay');
-const chatContainer = $('#chat-container');
-const chatMessagesEl = $('#chat-messages');
-const chatInput = $('#chatInput');
-const chatSendBtn = $('#chatSendBtn');
 
 // --- アプリケーションロジック ----------------------------------------------
 
 function getWeaponName(weapon) {
   return state.lang === 'en' && weapon.name_en ? weapon.name_en : weapon.name;
-}
-
-/**
- * 3rd-party API to get public IP address.
- * @returns {Promise<string|null>}
- */
-async function getIPAddress() {
-  try {
-    const response = await fetch('https://api.ipify.org?format=json');
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.ip;
-  } catch (error) {
-    console.error("Could not get IP address:", error);
-    return null;
-  }
 }
 
 function getActivePool() {
@@ -143,7 +90,6 @@ function pushHistoryItem(weapon, batchTime, playerNum, totalPlayers) {
 }
 
 function renderHistory() {
-  const isOnline = !!state.roomRef;
   const historyArray = [...state.history].sort((a, b) => a.time.localeCompare(b.time));
   const totalItems = historyArray.length;
   const batchIds = new Set(historyArray.map(h => h.time));
@@ -163,15 +109,9 @@ function renderHistory() {
     // 複数人プレイの場合のみプレイヤー番号を表示
     const playerLabel = h.totalPlayers > 1 ? `P${h.playerNum}: ` : '';
 
-    let deleteButton = '';
-    if (isOnline && state.isHost) {
-        deleteButton = `<button class="btn secondary icon" data-delete-key="${h.key}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>`;
-    } else if (!isOnline) {
-        // ローカルモードではインデックスで削除
-        const localIndex = state.history.findIndex(localItem => localItem.time === h.time && localItem.name === h.name);
-        deleteButton = `<button class="btn secondary icon" data-delete-index="${localIndex}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>`;
-    }
-
+    // ローカルモードではインデックスで削除
+    const localIndex = state.history.findIndex(localItem => localItem.time === h.time && localItem.name === h.name);
+    const deleteButton = `<button class="btn secondary icon" data-delete-index="${localIndex}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>`;
     return `
       <div class="history-item ${batchClass}">
         <div class="history-item__main">
@@ -192,28 +132,15 @@ function renderHistory() {
 }
 
 function handleDeleteHistoryItem(e) {
-  const target = e.target.closest('[data-delete-key], [data-delete-index]');
+  const target = e.target.closest('[data-delete-index]');
   if (!target) return;
 
-  // Online mode: host can delete by key
-  if (state.roomRef && state.isHost) {
-    const key = target.dataset.deleteKey;
-    if (key) {
-      state.roomRef.child('history').child(key).remove();
-      // The 'value' listener on history will re-render.
-      return;
-    }
-  }
-
-  // Local mode: delete by index
-  if (!state.roomRef) {
-    const index = parseInt(target.dataset.deleteIndex, 10);
-    if (!isNaN(index)) {
-      state.history.splice(index, 1);
-      renderHistory();
-      saveHistory();
-      updatePool();
-    }
+  const index = parseInt(target.dataset.deleteIndex, 10);
+  if (!isNaN(index)) {
+    state.history.splice(index, 1);
+    renderHistory();
+    saveHistory();
+    updatePool();
   }
 }
 
@@ -223,22 +150,8 @@ function pickRandom(arr) {
 
 function setControlsDisabled(disabled) {
   // 全画面ボタンはルーレット実行中も操作可能にするため、無効化の対象から除外する
-  // When disabling, disable everything.
-  if (disabled) {
-    $$('.main-controls button:not(#fullscreenBtn), .main-controls input, #history button').forEach(c => c.disabled = true);
-    $$('#classFilters input, #classFilters button').forEach(c => c.disabled = true);
-    return;
-  }
-
-  // When enabling, restore state based on role.
-  if (state.roomRef) {
-    // In a room, restore state based on host/viewer role
-    setRealtimeUiState(state.isHost ? 'in_room_host' : 'in_room_viewer');
-  } else {
-    // In local mode, enable all controls
-    $$('.main-controls button:not(#fullscreenBtn), .main-controls input, #history button').forEach(c => c.disabled = false);
-    $$('#classFilters input, #classFilters button').forEach(c => c.disabled = false);
-  }
+  $$('.main-controls button:not(#fullscreenBtn), .main-controls input, #history button').forEach(c => c.disabled = disabled);
+  $$('#classFilters input, #classFilters button').forEach(c => c.disabled = disabled);
 }
 
 /**
@@ -277,8 +190,7 @@ function runSingleAnimation(pool, finalPickOverride = null) {
                 interval = 40 + progress * 180;
 
                 if (progress >= 1) {
-                    // サーバーから指定されたブキがあればそれを、なければ最後のアニメーションのブキを最終結果とする
-                    const finalPick = finalPickOverride ?? lastPickForAnim ?? pickRandom(pool);
+                    const finalPick = lastPickForAnim ?? pickRandom(pool);
                     resolve(finalPick);
                 } else {
                     requestAnimationFrame(tick);
@@ -335,11 +247,10 @@ async function displaySpinResult(finalResults, pool) {
   setControlsDisabled(true);
 
   const playerCount = finalResults.length;
-  const isOnline = !!state.roomRef;
 
   if (playerCount === 1) {
       const result = finalResults[0];
-      await runSingleAnimation(pool, result);
+      await runSingleAnimation(pool);
       await showFinalResult([result]);
   } else {
       for (let i = 0; i < playerCount; i++) {
@@ -352,7 +263,7 @@ async function displaySpinResult(finalResults, pool) {
           const result = finalResults[i];
           if (!result) break;
 
-          await runSingleAnimation(pool, result);
+          await runSingleAnimation(pool);
           await showFinalResult([result]);
           await new Promise(resolve => setTimeout(resolve, 1500));
       }
@@ -363,29 +274,11 @@ async function displaySpinResult(finalResults, pool) {
 
   if (finalResults.length > 0) {
       const drawTime = new Date().toISOString();
-      if (isOnline) {
-          // Online mode: only host writes history and sends notifications
-          if (state.isHost) {
-              const historyRef = state.roomRef.child('history');
-              for (let i = 0; i < finalResults.length; i++) {
-                  const result = finalResults[i];
-                  historyRef.push({
-                      ...result,
-                      time: drawTime,
-                      playerNum: i + 1,
-                      totalPlayers: finalResults.length,
-                  });
-              }
-              await sendToDiscord(finalResults);
-          }
-      } else {
-          // Local mode: update local history and save
-          for (let i = 0; i < finalResults.length; i++) {
-              pushHistoryItem(finalResults[i], drawTime, i + 1, finalResults.length);
-          }
-          saveHistory();
-          await sendToDiscord(finalResults);
+      for (let i = 0; i < finalResults.length; i++) {
+          pushHistoryItem(finalResults[i], drawTime, i + 1, finalResults.length);
       }
+      saveHistory();
+      await sendToDiscord(finalResults);
 
       if ($('#autoCopy')?.checked) {
           await copyResultToClipboard(finalResults);
@@ -404,36 +297,13 @@ async function displaySpinResult(finalResults, pool) {
   updatePool();
 }
 
-async function performDraw() {
-  if (state.running || !state.isHost || !state.roomRef) return;
-
-  updatePool();
-  const finalResults = getDrawResults();
-  if (!finalResults) return;
-
-  // 結果をFirebaseに書き込む
-  state.roomRef.child('spinResult').set({
-    finalResults: finalResults,
-    pool: state.pool, // アニメーション用に元のプールも渡す
-    timestamp: firebase.database.ServerValue.TIMESTAMP
-  });
-}
-
 async function startSpin() {
   if (state.running) return;
 
-  if (state.roomRef) {
-    // オンラインモード: ホストのみが抽選を実行
-    if (state.isHost) {
-      await performDraw();
-    }
-  } else {
-    // ローカルモード
-    updatePool();
-    const finalResults = getDrawResults();
-    if (finalResults) {
-      await displaySpinResult(finalResults, state.pool);
-    }
+  updatePool();
+  const finalResults = getDrawResults();
+  if (finalResults) {
+    await displaySpinResult(finalResults, state.pool);
   }
 }
 
@@ -631,13 +501,9 @@ function resetAll() {
   
   $$('#classFilters input[type="checkbox"]').forEach(i => i.checked = true);
 
-  if (state.isHost && state.roomRef) {
-    state.roomRef.child('history').remove();
-  } else if (!state.roomRef) { // ローカルモードの場合のみ
-    state.history = [];
-    renderHistory();
-    saveHistory();
-  }
+  state.history = [];
+  renderHistory();
+  saveHistory();
 
   resultContainer.innerHTML = `
     <div id="resultName" class="name" data-i18n-key="reset-display-name">${t('reset-display-name')}</div>
@@ -911,571 +777,6 @@ async function testDiscordWebhook() {
   }
 }
 
-function updatePlayerList(players) {
-  playerCountDisplay.textContent = t('player-list-count', { count: players.length });
-  if (!players || players.length === 0) {
-    playerListEl.innerHTML = `<div class="empty" data-i18n-key="player-list-empty">${t('player-list-empty')}</div>`;
-    return;
-  }
-  playerListEl.innerHTML = players.map(player => {
-      const isMe = state.playerRef && player.id === state.playerRef.key;
-      const meIndicator = isMe ? ` <span class="my-indicator" title="${t('realtime-you')}">👤</span>` : '';
-      const hostIndicator = player.isHost ? ` <span class="host-icon" title="${t('realtime-host')}">👑</span>` : '';
-      
-      let adminControls = '';
-      if (state.isHost && !player.isHost) {
-          adminControls = `
-            <div class="player-actions">
-                <button class="btn-kick menu" data-action="admin-menu" data-player-id="${player.id}" data-player-name="${player.name}" title="${t('realtime-admin-menu')}">︙</button>
-            </div>
-          `;
-      }
-
-      return `
-      <div class="player-item">
-          <div class="player-name">
-            <span>${player.name}${meIndicator}${hostIndicator}</span>
-          </div>
-          ${adminControls}
-      </div>
-  `}).join('');
-}
-
-function addChatMessage(name, message, timestamp, isSystem = false) {
-  const messageEl = document.createElement('div');
-  const isSelf = name === state.playerName && !isSystem;
-  messageEl.className = `chat-message ${isSystem ? 'system' : ''} ${isSelf ? 'self' : ''}`;
-
-  if (isSystem) {
-    messageEl.textContent = message;
-  } else {
-    const time = timestamp ? new Date(timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '';
-    
-    const bubble = document.createElement('div');
-    bubble.className = 'chat-bubble';
-
-    if (!isSelf) {
-      const authorEl = document.createElement('div');
-      authorEl.className = 'chat-author';
-      authorEl.textContent = name;
-      bubble.appendChild(authorEl);
-    }
-
-    const textEl = document.createElement('div');
-    textEl.className = 'chat-text';
-    textEl.textContent = message;
-    bubble.appendChild(textEl);
-
-    const timeEl = document.createElement('div');
-    timeEl.className = 'chat-timestamp';
-    timeEl.textContent = time;
-    bubble.appendChild(timeEl);
-
-    messageEl.appendChild(bubble);
-  }
-
-  chatMessagesEl.appendChild(messageEl);
-  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
-}
-
-function renderTypingIndicator(typingUsers) {
-  const indicator = $('#typing-indicator');
-  if (!indicator) return;
-
-  // Filter out the current user
-  const otherTypingUsers = Object.values(typingUsers).filter(name => name !== state.playerName);
-  const count = otherTypingUsers.length;
-
-  if (count === 0) {
-    indicator.classList.remove('active');
-    indicator.innerHTML = '';
-    return;
-  }
-
-  let text;
-  if (count === 1) {
-    text = t('typing-single', { name: otherTypingUsers[0] });
-  } else if (count === 2) {
-    text = t('typing-two', { name1: otherTypingUsers[0], name2: otherTypingUsers[1] });
-  } else {
-    text = t('typing-multiple', { name1: otherTypingUsers[0], name2: otherTypingUsers[1], count: count - 2 });
-  }
-
-  indicator.innerHTML = `${text}<span class="dots"><span>.</span><span>.</span><span>.</span></span>`;
-  indicator.classList.add('active');
-}
-
-function updateMyTypingStatus(isTyping) {
-  if (!state.roomRef || !state.playerRef) return;
-  const typingRef = state.roomRef.child('typing').child(state.playerRef.key);
-  clearTimeout(state.typingTimeout);
-  if (isTyping) {
-    typingRef.set(state.playerName);
-    state.typingTimeout = setTimeout(() => updateMyTypingStatus(false), 3000);
-  } else {
-    typingRef.remove();
-  }
-}
-
-/**
- * 現在のフィルター設定をFirebaseに保存する（ホスト専用）
- */
-function updateFiltersOnFirebase() {
-  if (!state.isHost || !state.roomRef) return;
-
-  const filters = {
-    class: $$('input[data-class]').reduce((acc, cb) => ({ ...acc, [cb.dataset.class]: cb.checked }), {}),
-    sub: $$('input[data-sub]').reduce((acc, cb) => ({ ...acc, [cb.dataset.sub]: cb.checked }), {}),
-    sp: $$('input[data-sp]').reduce((acc, cb) => ({ ...acc, [cb.dataset.sp]: cb.checked }), {}),
-    noRepeat: noRepeat.checked,
-  };
-
-  state.roomRef.child('filters').set(filters);
-}
-
-/**
- * Firebaseから取得したフィルター設定をUIに適用する（視聴者専用）
- * @param {Object} filters - Firebaseから取得したフィルター設定
- */
-function applyFiltersFromFirebase(filters) {
-  if (!filters || state.isHost) return;
-
-  // 各フィルターのチェックボックスの状態を更新
-  if (filters.class) {
-    $$('input[data-class]').forEach(cb => {
-      if (filters.class[cb.dataset.class] !== undefined) cb.checked = filters.class[cb.dataset.class];
-    });
-  }
-  if (filters.sub) {
-    $$('input[data-sub]').forEach(cb => {
-      if (filters.sub[cb.dataset.sub] !== undefined) cb.checked = filters.sub[cb.dataset.sub];
-    });
-  }
-  if (filters.sp) {
-    $$('input[data-sp]').forEach(cb => {
-      if (filters.sp[cb.dataset.sp] !== undefined) cb.checked = filters.sp[cb.dataset.sp];
-    });
-  }
-
-  if (filters.noRepeat !== undefined) noRepeat.checked = filters.noRepeat;
-
-  updatePool();
-}
-
-// --- リアルタイム連携 (Firebase) ------------------------------------
-
-function initFirebase() {
-  try {
-    if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
-    console.warn("Firebase is not configured. Real-time features will be disabled.");
-    setRealtimeUiState('error');
-    return;
-  }
-    // Prevent re-initialization
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
-    }
-    state.db = firebase.database();
-    setRealtimeUiState('disconnected');
-
-    // URLからルームIDを読み取って自動参加
-    const params = new URLSearchParams(window.location.search);
-    const roomIdFromUrl = params.get('room');
-    if (roomIdFromUrl) {
-      roomIdInput.value = roomIdFromUrl;
-      // 少し待ってから参加処理を開始
-      setTimeout(() => {
-        if (playerNameInput.value.trim()) {
-          joinRoomBtn.click();
-        } else {
-          alert(t('player-name-required'));
-        }
-      }, 500);
-    }
-  } catch (error) {
-    console.error("Firebase initialization failed:", error);
-    setRealtimeUiState('error');
-  }
-}
-
-function showAdminMenu(targetButton) {
-  closeAdminMenu(); // Close any other open menu
-
-  const { playerId, playerName } = targetButton.dataset;
-  const menu = document.createElement('div');
-  menu.className = 'admin-menu';
-  menu.id = 'active-admin-menu';
-  // Store which button opened this menu to handle toggling
-  menu.dataset.openerPlayerId = playerId; 
-
-  menu.innerHTML = `
-    <button class="admin-menu-item" data-action="kick" data-player-id="${playerId}" data-player-name="${playerName}">${t('realtime-kick-player')}</button>
-    <button class="admin-menu-item block" data-action="block" data-player-id="${playerId}" data-player-name="${playerName}">${t('realtime-block-player')}</button>
-    <button class="admin-menu-item ban" data-action="ban" data-player-id="${playerId}" data-player-name="${playerName}">${t('realtime-ban-player')}</button>
-  `;
-
-  document.body.appendChild(menu);
-
-  const rect = targetButton.getBoundingClientRect();
-  menu.style.top = `${rect.bottom + window.scrollY + 2}px`;
-  menu.style.left = `${rect.right + window.scrollX - menu.offsetWidth}px`;
-}
-
-function closeAdminMenu() {
-  const existingMenu = document.getElementById('active-admin-menu');
-  if (existingMenu) {
-    existingMenu.remove();
-  }
-}
-
-function kickPlayer(playerId, playerName) {
-    if (!state.isHost || !state.roomRef) return;
-    const message = t('system-player-kicked', { name: playerName, host: state.playerName });
-    state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
-    state.roomRef.child('clients').child(playerId).remove();
-}
-
-function blockPlayer(playerId, playerName) {
-    if (!state.isHost || !state.roomRef) return;
-    state.roomRef.child('blockedNames').push(playerName);
-    const message = t('system-player-blocked', { name: playerName, host: state.playerName });
-    state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
-    state.roomRef.child('clients').child(playerId).remove();
-}
-
-function banPlayer(playerId, playerName) {
-    if (!state.isHost || !state.roomRef) return;
-    const playerToBan = state.players.find(p => p.id === playerId);
-    if (!playerToBan || !playerToBan.ip) return;
-    state.roomRef.child('bannedIPs').push(playerToBan.ip);
-    blockPlayer(playerId, playerName); // Also block by name and kick
-}
-
-async function createRoom() { // UIの状態を更新して、処理中であることをユーザーにフィードバック
-  if (!state.db) {
-    alert("データベースに接続できません。ページをリロードして再度お試しください。");
-    console.error("Firebase Database is not initialized. state.db is null.");
-    return;
-  }
-
-  createRoomBtn.disabled = true;
-  joinRoomBtn.disabled = true;
-  createRoomBtn.textContent = t('realtime-creating-btn');
-
-  const reEnableButtons = () => {
-    createRoomBtn.disabled = false;
-    joinRoomBtn.disabled = false;
-    createRoomBtn.textContent = t('realtime-create-btn');
-  };
-
-  const name = playerNameInput.value.trim();
-  if (!name) {
-    alert(t('player-name-required'));
-    reEnableButtons();
-    return;
-  }
-  state.playerName = name;
-
-  const ip = await getIPAddress();
-  try {
-    const roomsRef = state.db.ref('rooms');
-    let newRoomId;
-    let roomExists = true;
-
-    // 衝突しない12桁の数字のIDを生成する
-    while (roomExists) {
-      newRoomId = Math.floor(100000000000 + Math.random() * 900000000000).toString();
-      const snapshot = await roomsRef.child(newRoomId).once('value');
-      roomExists = snapshot.exists();
-    }
-
-    state.roomId = newRoomId;
-    state.roomRef = roomsRef.child(state.roomId);
-    await state.roomRef.set({
-      createdAt: firebase.database.ServerValue.TIMESTAMP,
-      lastSpin: null
-    });
-
-    state.playerRef = state.roomRef.child('clients').push({
-      name: state.playerName,
-      joinedAt: firebase.database.ServerValue.TIMESTAMP,
-      ip: ip
-    });
-    state.playerRef.onDisconnect().remove();
-    state.roomRef.child('typing').child(state.playerRef.key).onDisconnect().remove();
-
-    listenToRoomChanges();
-    // ルーム作成時に現在のフィルター状態を書き込む
-    updateFiltersOnFirebase();
-  } catch (error) {
-    console.error("Error creating room:", error);
-    const detail = error.code ? `(${error.code})` : `(${error.message})`;
-    alert(`${t('realtime-error-create')} ${detail}`);
-    reEnableButtons();
-  }
-}
-
-async function joinRoom() {
-  createRoomBtn.disabled = true;
-  joinRoomBtn.disabled = true;
-  joinRoomBtn.textContent = t('realtime-joining-btn');
-
-  const reEnableButtons = () => {
-      createRoomBtn.disabled = false;
-      joinRoomBtn.disabled = false;
-      joinRoomBtn.textContent = t('realtime-join-btn');
-  };
-
-  const name = playerNameInput.value.trim();
-  if (!name) {
-    alert(t('player-name-required'));
-    reEnableButtons();
-    return;
-  }
-  const roomId = roomIdInput.value.trim();
-  if (!roomId) {
-    reEnableButtons();
-    return;
-  }
-
-  state.playerName = name;
-  state.roomId = roomId;
-  state.roomRef = state.db.ref(`rooms/${state.roomId}`);
-  const ip = await getIPAddress();
-
-  try {
-    const snapshot = await state.roomRef.once('value');
-    if (!snapshot.exists()) {
-      alert(t('realtime-error-connect'));
-      reEnableButtons();
-      return;
-    }
-
-    // Check if banned by IP
-    const bannedIPsSnapshot = await state.roomRef.child('bannedIPs').once('value');
-    const bannedIPs = Object.values(bannedIPsSnapshot.val() || {});
-    if (ip && bannedIPs.includes(ip)) {
-        alert(t('realtime-error-banned-ip'));
-        reEnableButtons();
-        return;
-    }
-
-    // Check if blocked by name
-    const blockedNamesSnapshot = await state.roomRef.child('blockedNames').once('value');
-    const blockedNames = Object.values(blockedNamesSnapshot.val() || {});
-    if (blockedNames.includes(name)) {
-        alert(t('realtime-error-blocked'));
-        reEnableButtons();
-        return;
-    }
-
-    state.playerRef = state.roomRef.child('clients').push({
-      name: state.playerName,
-      joinedAt: firebase.database.ServerValue.TIMESTAMP,
-      ip: ip
-    });
-    state.playerRef.onDisconnect().remove();
-    state.roomRef.child('typing').child(state.playerRef.key).onDisconnect().remove();
-
-    listenToRoomChanges();
-  } catch (error) {
-    console.error("Error joining room:", error);
-    const detail = error.code ? `(${error.code})` : `(${error.message})`;
-    alert(`${t('realtime-error-join')} ${detail}`);
-    reEnableButtons();
-  }
-}
-
-function listenToRoomChanges() {
-  if (!state.roomRef) return;
-
-  let previousPlayers = {};
-  let isInitialLoad = true;
-
-  // 参加者リストの変更をリッスン
-  state.roomRef.child('clients').on('value', (snapshot) => {
-    const clients = snapshot.val() || {};
-
-    if (!isInitialLoad && state.isHost) {
-      handlePlayerChanges(clients, previousPlayers);
-    }
-    previousPlayers = clients;
-    isInitialLoad = false;
-
-    const playerArray = Object.entries(clients)
-      .sort(([, a], [, b]) => a.joinedAt - b.joinedAt)
-      .map(([key, val], index) => ({
-        id: key,
-        name: val.name,
-        isHost: index === 0,
-        ip: val.ip || null
-      }));
-
-    state.players = playerArray;
-    updatePlayerList(playerArray);
-
-    const me = playerArray.find(p => p.id === state.playerRef?.key);
-    if (me) {
-      const wasHost = state.isHost;
-      state.isHost = me.isHost;
-      if (state.isHost && !wasHost && playerArray.length > 1) {
-        state.roomRef.child('chat').push({
-          name: null,
-          message: t('system-new-host', { name: me.name }),
-          isSystem: true,
-          timestamp: firebase.database.ServerValue.TIMESTAMP
-        });
-      }
-      setRealtimeUiState(state.isHost ? 'in_room_host' : 'in_room_viewer');
-    } else {
-      // 自分が見つからない = キックされたか、自ら退出したか、ブロックされた
-      handleLeaveRoom(false); // UIリセットのみ
-    }
-  });
-
-  // 抽選結果の変更をリッスン
-  state.roomRef.child('spinResult').on('value', (snapshot) => {
-    if (!snapshot.exists()) return;
-    const { finalResults, pool, timestamp } = snapshot.val();
-    // 自分の抽選より新しい結果のみ表示
-    if (timestamp > (state.lastSpinTimestamp || 0)) {
-      state.lastSpinTimestamp = timestamp;
-      displaySpinResult(finalResults, pool);
-    }
-  });
-
-  // チャットメッセージの追加をリッスン
-  state.roomRef.child('chat').on('child_added', (snapshot) => {
-    const { name, message, isSystem, timestamp } = snapshot.val();
-    addChatMessage(name, message, timestamp, isSystem);
-  });
-
-  // フィルター情報の変更をリッスン（視聴者のみ）
-  state.roomRef.child('filters').on('value', (snapshot) => {
-    if (snapshot.exists()) {
-      applyFiltersFromFirebase(snapshot.val());
-    }
-  });
-
-  // 履歴の変更をリッスン
-  state.roomRef.child('history').on('value', (snapshot) => {
-      const historyData = snapshot.val() || {};
-      state.history = Object.entries(historyData).map(([key, value]) => ({
-          ...value,
-          key: key,
-      }));
-      renderHistory();
-      updatePool();
-  });
-
-  // Listen for typing indicators
-  state.roomRef.child('typing').on('value', (snapshot) => {
-    const typingUsers = snapshot.val() || {};
-    renderTypingIndicator(typingUsers);
-  });
-
-  roomIdDisplay.textContent = state.roomId;
-  const url = new URL(window.location);
-  url.searchParams.set('room', state.roomId);
-  window.history.pushState({}, '', url);
-}
-
-function handlePlayerChanges(currentPlayers, previousPlayers) {
-  if (!state.roomRef) return;
-  const currentPlayerIds = Object.keys(currentPlayers);
-  const previousPlayerIds = Object.keys(previousPlayers);
-
-  const newPlayerIds = currentPlayerIds.filter(id => !previousPlayerIds.includes(id));
-  newPlayerIds.forEach(id => {
-    if (currentPlayers[id]) {
-      const message = t('system-player-joined', { name: currentPlayers[id].name });
-      state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
-    }
-  });
-
-  const leftPlayerIds = previousPlayerIds.filter(id => !currentPlayerIds.includes(id));
-  leftPlayerIds.forEach(id => {
-    if (previousPlayers[id]) {
-      const message = t('system-player-left', { name: previousPlayers[id].name });
-      state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
-    }
-  });
-}
-
-// --- リアルタイム連携 (Firebase) ------------------------------------
-
-function setRealtimeUiState(uiState) {
-    const spinBtn = $('#spinBtn');
-    roomJoinUi.style.display = (uiState === 'disconnected' || uiState === 'error') ? 'flex' : 'none';
-    roomInfoUi.style.display = (uiState.startsWith('in_room')) ? 'flex' : 'none';
-    const inRoom = uiState.startsWith('in_room');
-    const isViewer = uiState === 'in_room_viewer';
-    playerListContainer.style.display = inRoom ? 'block' : 'none';
-    chatContainer.style.display = inRoom ? 'block' : 'none';
-    if (uiState === 'disconnected') {
-      chatMessagesEl.innerHTML = '';
-    }
-    hostBadge.style.display = (uiState === 'in_room_host') ? 'inline-block' : 'none';
-    playerNameInput.disabled = inRoom;
-    // スピンボタンは、ルーム内ではホストのみ、ローカルでは常に有効
-    if (inRoom) {
-      spinBtn.disabled = (uiState !== 'in_room_host');
-    } else {
-      spinBtn.disabled = false;
-    }
-
-    // フィルターUIの有効/無効を切り替え
-    $$('#classFilters input, #classFilters button, #noRepeat').forEach(el => {
-      el.disabled = isViewer;
-    });
-}
-
-function handleLeaveRoom(removeFromDb = true) {
-  if (removeFromDb && state.playerRef) {
-    if (state.roomRef) {
-      state.roomRef.child('typing').child(state.playerRef.key).remove();
-    }
-    state.playerRef.onDisconnect().cancel();
-    state.playerRef.remove();
-  }
-
-  if (state.roomRef) {
-    state.roomRef.off(); // 全てのリスナーを解除
-  }
-
-  state.roomRef = null;
-  state.playerRef = null;
-  state.roomId = null;
-  state.isHost = false;
-
-  setRealtimeUiState('disconnected');
-  updatePlayerList([]);
-
-  // Clear online history and load local history
-  state.history = [];
-  loadHistory();
-  renderHistory();
-  updatePool();
-
-  const url = new URL(window.location);
-  url.searchParams.delete('room');
-  window.history.pushState({}, '', url);
-}
-
-function sendChatMessage() {
-  const message = chatInput.value.trim();
-  if (message && state.roomRef) {
-    updateMyTypingStatus(false);
-    state.roomRef.child('chat').push({
-      name: state.playerName,
-      message: message,
-      timestamp: firebase.database.ServerValue.TIMESTAMP
-    });
-    chatInput.value = '';
-  }
-}
-
-
 // --- 初期化とイベントリスナー設定 ------------------------------------
 
 function buildFilterUI() {
@@ -1519,65 +820,6 @@ function setupEventListeners() {
   $('#resetBtn').addEventListener('click', resetAll);
   playerCountInput.addEventListener('change', saveSettings);
 
-  // Realtime controls
-  createRoomBtn.addEventListener('click', createRoom);
-  joinRoomBtn.addEventListener('click', joinRoom);
-  leaveRoomBtn.addEventListener('click', () => handleLeaveRoom(true));
-  roomIdDisplay.addEventListener('click', () => navigator.clipboard.writeText(state.roomId));
-  chatSendBtn.addEventListener('click', sendChatMessage);
-  chatInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      sendChatMessage();
-    }
-  });
-  chatInput.addEventListener('input', () => {
-    if (state.roomRef) {
-      updateMyTypingStatus(true);
-    }
-  });
-
-  // Admin menu and actions handler
-  document.addEventListener('click', (e) => {
-    const menuButton = e.target.closest('[data-action="admin-menu"]');
-    const menuItem = e.target.closest('.admin-menu-item');
-    const openMenu = document.getElementById('active-admin-menu');
-
-    // If a menu button is clicked
-    if (menuButton) {
-        e.stopPropagation();
-        if (!state.isHost) return;
-
-        // If a menu is open for this button, close it. Otherwise, open it.
-        if (openMenu && openMenu.dataset.openerPlayerId === menuButton.dataset.playerId) {
-            closeAdminMenu();
-        } else {
-            showAdminMenu(menuButton);
-        }
-        return;
-    }
-
-    // If a menu item is clicked
-    if (menuItem) {
-        if (!state.isHost) return;
-        const { action, playerId, playerName } = menuItem.dataset;
-        
-        if (action === 'kick') {
-            if (confirm(t('realtime-kick-confirm', { name: playerName }))) kickPlayer(playerId, playerName);
-        } else if (action === 'block') {
-            if (confirm(t('realtime-block-confirm', { name: playerName }))) blockPlayer(playerId, playerName);
-        } else if (action === 'ban') {
-            if (confirm(t('realtime-ban-confirm', { name: playerName }))) banPlayer(playerId, playerName);
-        }
-        closeAdminMenu();
-        return;
-    }
-
-    // If clicked anywhere else, close the menu
-    if (openMenu && !e.target.closest('.admin-menu')) {
-        closeAdminMenu();
-    }
-  });
-
   fullscreenBtn?.addEventListener('click', toggleFullscreen);
   document.addEventListener('fullscreenchange', updateFullscreenButton);
 
@@ -1615,9 +857,6 @@ function setupEventListeners() {
       }
       updatePool();
       saveSettings();
-      if (state.isHost) {
-        updateFiltersOnFirebase();
-      }
     };
   }
 
@@ -1631,9 +870,6 @@ function setupEventListeners() {
   noRepeat.addEventListener('change', () => {
     updatePool();
     saveSettings();
-    if (state.isHost) {
-      updateFiltersOnFirebase();
-    }
   });
 
   $('#classFilters').addEventListener('click', e => {
@@ -1648,9 +884,6 @@ function setupEventListeners() {
       checkboxes.forEach(cb => cb.checked = newCheckedState);
       updatePool();
       saveSettings();
-      if (state.isHost) {
-        updateFiltersOnFirebase();
-      }
     }
   });
 }
@@ -1665,7 +898,6 @@ function init() {
     console.log(`App updated from ${savedVersion} to ${APP_VERSION}. Clearing data and reloading.`);
     localStorage.removeItem('splaRouletteSettings');
     localStorage.removeItem('splaRouletteHistory');
-    localStorage.removeItem('splaRoulettePlayerName');
     localStorage.setItem('splaRouletteVersion', APP_VERSION); // 新しいバージョンを保存
     location.reload(true); // キャッシュを無視してリロード
     return; // リロードするため、以降の初期化処理は中断
@@ -1688,24 +920,8 @@ function init() {
   buildFilterUI();
   setupEventListeners();
   loadAndApplySettings();
-
-  // Firebaseを常に初期化して、いつでもルーム作成・参加ができるようにする
-  initFirebase();
-
-  const params = new URLSearchParams(window.location.search);
-  if (!params.has('room')) {
-    // URLにルームIDがない場合（＝ローカルモードで起動した場合）、
-    // ローカルの履歴を読み込む
-    loadHistory();
-    updatePool();
-  }
-
-  const savedName = localStorage.getItem('splaRoulettePlayerName') || '';
-  playerNameInput.value = savedName;
-  playerNameInput.addEventListener('input', () => {
-    localStorage.setItem('splaRoulettePlayerName', playerNameInput.value);
-    state.playerName = playerNameInput.value;
-  });
+  loadHistory();
+  updatePool();
 }
 
 init();
