@@ -511,10 +511,9 @@ input:checked + .slider:before {
 .admin-menu-item.block:hover { background-color: var(--danger); }
 .admin-menu-item.ban:hover { background-color: #ff9800; }
 
-.admin-menu-divider {
-  height: 1px;
-  background-color: var(--card-border);
-  margin: 4px 0;
+.my-indicator {
+  display: inline-block;
+  margin-left: 6px;
 }
 
 /* Realtime Controls */
@@ -535,36 +534,6 @@ input:checked + .slider:before {
 .leave-room-container .btn { width: 100%; }
 
 /* --- Status Indicators --- */
-/* Loading Overlay */
-.loader-overlay {
-  position: fixed;
-  inset: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000; /* Higher than modal */
-  -webkit-backdrop-filter: blur(4px);
-  backdrop-filter: blur(4px);
-  opacity: 0;
-  transition: opacity 0.2s ease-in-out;
-  pointer-events: none;
-}
-
-.loader-overlay.visible {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.loader-spinner {
-  width: 50px;
-  height: 50px;
-  border: 5px solid var(--muted);
-  border-top-color: var(--accent);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
 body.offline::before {
   content: attr(data-reconnecting-text);
   position: fixed;
@@ -579,47 +548,6 @@ body.offline::before {
   font-weight: bold;
   z-index: 1001;
   animation: pulse 2s infinite;
-}
-
-/* --- Toast Notification --- */
-#toast-container {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 1500; /* modalよりは上、loaderよりは下 */
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  pointer-events: none; /* Toast自体はクリックできないようにする */
-}
-
-.toast {
-  background-color: rgba(var(--panel-rgb), 0.85);
-  color: var(--text);
-  padding: 10px 20px;
-  border-radius: 999px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-  border: 1px solid var(--card-border);
-  font-size: 14px;
-  font-weight: 600;
-  opacity: 0;
-  transform: translateY(20px);
-  transition: opacity 0.3s ease, transform 0.3s ease;
-  -webkit-backdrop-filter: blur(5px);
-  backdrop-filter: blur(5px);
-}
-
-.toast.show {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 @keyframes pulse {

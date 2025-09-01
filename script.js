@@ -69,46 +69,11 @@ const chatContainer = $('#chat-container');
 const chatMessagesEl = $('#chat-messages');
 const chatInput = $('#chatInput');
 const chatSendBtn = $('#chatSendBtn');
-const loaderOverlay = $('#loader-overlay');
 
 // --- アプリケーションロジック ----------------------------------------------
 
 function getWeaponName(weapon) {
   return state.lang === 'en' && weapon.name_en ? weapon.name_en : weapon.name;
-}
-
-function showLoader(visible) {
-    if (loaderOverlay) {
-        loaderOverlay.style.display = visible ? 'flex' : 'none';
-    }
-}
-
-function escapeHtml(str) {
-    if (!str) return '';
-    return str.replace(/[&<>"']/g, (match) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[match]));
-}
-
-function showToast(message) {
-  const container = $('#toast-container');
-  if (!container) return;
-
-  const toast = document.createElement('div');
-  toast.className = 'toast';
-  toast.textContent = message;
-  container.appendChild(toast);
-
-  // 表示アニメーション
-  setTimeout(() => {
-    toast.classList.add('show');
-  }, 10);
-
-  // 3秒後に消す
-  setTimeout(() => {
-    toast.classList.remove('show');
-    toast.addEventListener('transitionend', () => {
-      toast.remove();
-    });
-  }, 3000);
 }
 
 /**
@@ -171,8 +136,6 @@ function updateProbText() {
 function pushHistoryItem(weapon, batchTime, playerNum, totalPlayers) {
   const historyItem = {
     ...weapon,
-    // タイムスタンプとプレイヤー番号、乱数でユニークIDを生成
-    id: `${batchTime}-${playerNum}-${Math.random().toString(36).slice(2)}`,
     time: batchTime,
     playerNum,
     totalPlayers,
@@ -206,8 +169,9 @@ function renderHistory() {
     if (isOnline && state.isHost) {
         deleteButton = `<button class="btn secondary icon" data-delete-key="${h.key}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>`;
     } else if (!isOnline) {
-        // ローカルモードではIDで削除
-        deleteButton = `<button class="btn secondary icon" data-delete-id="${h.id}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>`;
+        // ローカルモードではインデックスで削除
+        const localIndex = state.history.findIndex(localItem => localItem.time === h.time && localItem.name === h.name);
+        deleteButton = `<button class="btn secondary icon" data-delete-index="${localIndex}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>`;
     }
 
     return `
@@ -230,7 +194,7 @@ function renderHistory() {
 }
 
 function handleDeleteHistoryItem(e) {
-  const target = e.target.closest('[data-delete-key], [data-delete-id]');
+  const target = e.target.closest('[data-delete-key], [data-delete-index]');
   if (!target) return;
 
   // Online mode: host can delete by key
@@ -243,17 +207,14 @@ function handleDeleteHistoryItem(e) {
     }
   }
 
-  // Local mode: delete by id
+  // Local mode: delete by index
   if (!state.roomRef) {
-    const idToDelete = target.dataset.deleteId;
-    if (idToDelete) {
-      const index = state.history.findIndex(item => item.id === idToDelete);
-      if (index > -1) {
-        state.history.splice(index, 1);
-        renderHistory();
-        saveHistory();
-        updatePool();
-      }
+    const index = parseInt(target.dataset.deleteIndex, 10);
+    if (!isNaN(index)) {
+      state.history.splice(index, 1);
+      renderHistory();
+      saveHistory();
+      updatePool();
     }
   }
 }
@@ -453,7 +414,7 @@ async function performDraw() {
   if (!finalResults) return;
 
   // 結果をFirebaseに書き込む
-  await state.roomRef.child('spinResult').set({
+  state.roomRef.child('spinResult').set({
     finalResults: finalResults,
     pool: state.pool, // アニメーション用に元のプールも渡す
     timestamp: firebase.database.ServerValue.TIMESTAMP
@@ -466,12 +427,7 @@ async function startSpin() {
   if (state.roomRef) {
     // オンラインモード: ホストのみが抽選を実行
     if (state.isHost) {
-      try {
-        await performDraw();
-      } catch (error) {
-        console.error("Error starting spin:", error);
-        alert(t('error-performing-draw'));
-      }
+      await performDraw();
     }
   } else {
     // ローカルモード
@@ -1201,8 +1157,7 @@ async function createRoom() { // UIの状態を更新して、処理中である
     await state.roomRef.set({
       createdAt: firebase.database.ServerValue.TIMESTAMP,
       lastActivity: firebase.database.ServerValue.TIMESTAMP,
-      lastSpin: null,
-      host: state.playerName,
+      lastSpin: null
     });
 
     state.playerRef = state.roomRef.child('clients').push({
@@ -1594,21 +1549,10 @@ function setupEventListeners() {
   playerCountInput.addEventListener('change', saveSettings);
 
   // Realtime controls
-  playerNameInput.addEventListener('input', updateJoinButtonsState);
-  roomIdInput.addEventListener('input', updateJoinButtonsState);
   createRoomBtn.addEventListener('click', createRoom);
   joinRoomBtn.addEventListener('click', joinRoom);
   leaveRoomBtn.addEventListener('click', () => handleLeaveRoom(true));
-  roomIdDisplay.addEventListener('click', () => {
-    navigator.clipboard.writeText(state.roomId)
-      .then(() => {
-        showToast(t('realtime-room-id-copied'));
-      })
-      .catch(err => {
-        console.error('Failed to copy room ID: ', err);
-        showToast(t('error-copy-failed'));
-      });
-  });
+  roomIdDisplay.addEventListener('click', () => navigator.clipboard.writeText(state.roomId));
   chatSendBtn.addEventListener('click', sendChatMessage);
   chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
