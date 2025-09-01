@@ -88,6 +88,29 @@ function escapeHtml(str) {
     return str.replace(/[&<>"']/g, (match) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[match]));
 }
 
+function showToast(message) {
+  const container = $('#toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  // 表示アニメーション
+  setTimeout(() => {
+    toast.classList.add('show');
+  }, 10);
+
+  // 3秒後に消す
+  setTimeout(() => {
+    toast.classList.remove('show');
+    toast.addEventListener('transitionend', () => {
+      toast.remove();
+    });
+  }, 3000);
+}
+
 /**
  * 3rd-party API to get public IP address.
  * @returns {Promise<string|null>}
@@ -1571,10 +1594,21 @@ function setupEventListeners() {
   playerCountInput.addEventListener('change', saveSettings);
 
   // Realtime controls
+  playerNameInput.addEventListener('input', updateJoinButtonsState);
+  roomIdInput.addEventListener('input', updateJoinButtonsState);
   createRoomBtn.addEventListener('click', createRoom);
   joinRoomBtn.addEventListener('click', joinRoom);
   leaveRoomBtn.addEventListener('click', () => handleLeaveRoom(true));
-  roomIdDisplay.addEventListener('click', () => navigator.clipboard.writeText(state.roomId));
+  roomIdDisplay.addEventListener('click', () => {
+    navigator.clipboard.writeText(state.roomId)
+      .then(() => {
+        showToast(t('realtime-room-id-copied'));
+      })
+      .catch(err => {
+        console.error('Failed to copy room ID: ', err);
+        showToast(t('error-copy-failed'));
+      });
+  });
   chatSendBtn.addEventListener('click', sendChatMessage);
   chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
