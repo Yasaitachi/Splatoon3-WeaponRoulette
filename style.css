@@ -511,29 +511,64 @@ input:checked + .slider:before {
 .admin-menu-item.block:hover { background-color: var(--danger); }
 .admin-menu-item.ban:hover { background-color: #ff9800; }
 
-.my-indicator {
-  display: inline-block;
-  margin-left: 6px;
+.admin-menu-divider {
+  height: 1px;
+  background-color: var(--card-border);
+  margin: 4px 0;
 }
 
 /* Realtime Controls */
 #realtime-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 12px;  
+  flex-wrap: wrap;
 }
 #room-join-ui { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 #realtime-controls .input-text { padding: 6px 10px; font-size: 14px; }
 #realtime-controls #playerNameInput { width: 180px; }
-#realtime-controls #roomIdInput { width: 160px; }
+#realtime-controls #roomIdInput { width: 120px; }
+#realtime-controls #roomPasswordInput { width: 120px; }
 #realtime-controls .btn { padding: 6px 12px; font-size: 14px; }
-#room-info-ui { display: flex; align-items: center; gap: 8px; }
+#room-info-ui { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 #roomIdDisplay { font-weight: bold; background: rgba(0,0,0,.2); padding: 2px 6px; border-radius: 4px; user-select: all; cursor: pointer; }
+#room-password-display-container { display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,.2); padding: 2px 6px; border-radius: 4px; }
+#roomPasswordDisplay { font-weight: bold; user-select: all; cursor: pointer; }
 #host-badge { padding: 2px 8px; font-size: 10px; }
 .leave-room-container { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--card-border); }
 .leave-room-container .btn { width: 100%; }
 
 /* --- Status Indicators --- */
+/* Loading Overlay */
+.loader-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000; /* Higher than modal */
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  pointer-events: none;
+}
+
+.loader-overlay.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.loader-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid var(--muted);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
 body.offline::before {
   content: attr(data-reconnecting-text);
   position: fixed;
@@ -548,6 +583,47 @@ body.offline::before {
   font-weight: bold;
   z-index: 1001;
   animation: pulse 2s infinite;
+}
+
+/* --- Toast Notification --- */
+#toast-container {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1500; /* modalよりは上、loaderよりは下 */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none; /* Toast自体はクリックできないようにする */
+}
+
+.toast {
+  background-color: rgba(var(--panel-rgb), 0.85);
+  color: var(--text);
+  padding: 10px 20px;
+  border-radius: 999px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+  border: 1px solid var(--card-border);
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @keyframes pulse {

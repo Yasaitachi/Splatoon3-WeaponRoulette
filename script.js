@@ -1,16 +1,66 @@
 // --- Firebase Configuration -----------------------------------------------
-
-// ▼▼▼ PASTE FIREBASE CONFIG HERE ▼▼▼
-const firebaseConfig = {
-  apiKey: "AIzaSyCasaRCxU26RD8Dvnzs4pT1uKgbX0MJgr8",
-  authDomain: "splatoon3-weponroulette.firebaseapp.com",
-  databaseURL: "https://splatoon3-weponroulette-default-rtdb.firebaseio.com",
-  projectId: "splatoon3-weponroulette",
-  storageBucket: "splatoon3-weponroulette.firebasestorage.app",
-  messagingSenderId: "198539626159",
-  appId: "1:198539626159:web:6790cb5270add8bc00f65a"
+const serverList = {
+  'server1': {
+    name: 'サーバー1',
+    name_en: 'Server 1',
+    config: {
+      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+      apiKey: "AIzaSyDU1_EpLI3SXLYIiDdC52OJf8f6EcaVDgs",
+      authDomain: "splatoon3-weapon-roulette1.firebaseapp.com",
+      databaseURL: "https://splatoon3-weapon-roulette1-default-rtdb.firebaseio.com",
+      projectId: "splatoon3-weapon-roulette1",
+      storageBucket: "splatoon3-weapon-roulette1.firebasestorage.app",
+      messagingSenderId: "403751873324",
+      appId: "1:403751873324:web:c1517d7238801b1c431a89",
+      measurementId: "G-RSNY1FGMW8"
+    }
+  },
+  'server2': {
+    name: 'サーバー2',
+    name_en: 'Server 2',
+    config: {
+      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+      apiKey: "AIzaSyAniQoP6FnHMG3dL2_UBmyD8QzO3O78CFs",
+      authDomain: "splatoon3-weaponroulette-d1d5e.firebaseapp.com",
+      databaseURL: "https://splatoon3-weaponroulette-d1d5e-default-rtdb.firebaseio.com",
+      projectId: "splatoon3-weaponroulette-d1d5e",
+      storageBucket: "splatoon3-weaponroulette-d1d5e.firebasestorage.app",
+      messagingSenderId: "8343949754",
+      appId: "1:8343949754:web:1174fe2a9e00f6ddad0d83",
+      measurementId: "G-5XLXY18BGR"
+    }
+  },
+  'server3': {
+    name: 'サーバー3',
+    name_en: 'Server 3',
+    config: {
+      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+      apiKey: "AIzaSyAHsLIv_ab0RZRcT5Ac5mFDPTuACHcmOjY",
+      authDomain: "splatoon3-weapon-roulette3.firebaseapp.com",
+      databaseURL: "https://splatoon3-weapon-roulette3-default-rtdb.firebaseio.com",
+      projectId: "splatoon3-weapon-roulette3",
+      storageBucket: "splatoon3-weapon-roulette3.firebasestorage.app",
+      messagingSenderId: "728808657397",
+      appId: "1:728808657397:web:6b658f1901e878a73090bc",
+      measurementId: "G-5E7T75GQ2T"
+    }
+  },
+  'server4': {
+    name: 'サーバー4',
+    name_en: 'Server 4',
+    config: {
+      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+      apiKey: "AIzaSyC8IMWMzHFzkHJRobu42Tt7_IBsiNcPFa8",
+      authDomain: "splatoon3-weapon-roulette4.firebaseapp.com",
+      databaseURL: "https://splatoon3-weapon-roulette4-default-rtdb.firebaseio.com",
+      projectId: "splatoon3-weapon-roulette4",
+      storageBucket: "splatoon3-weapon-roulette4.firebasestorage.app",
+      messagingSenderId: "114867132156",
+      appId: "1:114867132156:web:bb820f76f0eb068409e979",
+      measurementId: "G-694Q4H5PR4"
+    }
+  }
 };
-// ▲▲▲ PASTE FIREBASE CONFIG HERE ▲▲▲
 
 
 // --- グローバル変数 ---------------------------------------------------------
@@ -26,6 +76,7 @@ const state = {
   interval: 50,
   // Firebase state
   db: null,
+  dbs: {},
   roomRef: null,
   playerRef: null,
   roomId: null,
@@ -57,6 +108,10 @@ const createRoomBtn = $('#createRoomBtn');
 const joinRoomBtn = $('#joinRoomBtn');
 const leaveRoomBtn = $('#leaveRoomBtn');
 const roomIdInput = $('#roomIdInput');
+const roomPasswordInput = $('#roomPasswordInput');
+const roomPasswordDisplayContainer = $('#room-password-display-container');
+const roomPasswordDisplay = $('#roomPasswordDisplay');
+const copyPasswordBtn = $('#copyPasswordBtn');
 const roomJoinUi = $('#room-join-ui');
 const roomInfoUi = $('#room-info-ui');
 const roomIdDisplay = $('#roomIdDisplay');
@@ -69,11 +124,60 @@ const chatContainer = $('#chat-container');
 const chatMessagesEl = $('#chat-messages');
 const chatInput = $('#chatInput');
 const chatSendBtn = $('#chatSendBtn');
+const loaderOverlay = $('#loader-overlay');
 
 // --- アプリケーションロジック ----------------------------------------------
 
 function getWeaponName(weapon) {
   return state.lang === 'en' && weapon.name_en ? weapon.name_en : weapon.name;
+}
+
+function showLoader(visible) {
+    if (loaderOverlay) {
+        loaderOverlay.style.display = visible ? 'flex' : 'none';
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>"']/g, (match) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'}[match]));
+}
+
+function showToast(message) {
+  const container = $('#toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = 'toast';
+  toast.textContent = message;
+  container.appendChild(toast);
+
+  // 表示アニメーション
+  setTimeout(() => {
+    toast.classList.add('show');
+  }, 10);
+
+  // 3秒後に消す
+  setTimeout(() => {
+    toast.classList.remove('show');
+    toast.addEventListener('transitionend', () => {
+      toast.remove();
+    });
+  }, 3000);
+}
+
+/**
+ * ランダムな英数字のパスワードを生成します。
+ * @param {number} length - パスワードの長さ（デフォルトは6）
+ * @returns {string} 生成されたパスワード
+ */
+function generatePassword(length = 6) {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let password = '';
+  for (let i = 0; i < length; i++) {
+    password += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return password;
 }
 
 /**
@@ -136,6 +240,8 @@ function updateProbText() {
 function pushHistoryItem(weapon, batchTime, playerNum, totalPlayers) {
   const historyItem = {
     ...weapon,
+    // タイムスタンプとプレイヤー番号、乱数でユニークIDを生成
+    id: `${batchTime}-${playerNum}-${Math.random().toString(36).slice(2)}`,
     time: batchTime,
     playerNum,
     totalPlayers,
@@ -169,9 +275,8 @@ function renderHistory() {
     if (isOnline && state.isHost) {
         deleteButton = `<button class="btn secondary icon" data-delete-key="${h.key}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>`;
     } else if (!isOnline) {
-        // ローカルモードではインデックスで削除
-        const localIndex = state.history.findIndex(localItem => localItem.time === h.time && localItem.name === h.name);
-        deleteButton = `<button class="btn secondary icon" data-delete-index="${localIndex}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>`;
+        // ローカルモードではIDで削除
+        deleteButton = `<button class="btn secondary icon" data-delete-id="${h.id}" data-i18n-title="history-delete-item" title="${t('history-delete-item')}">×</button>`;
     }
 
     return `
@@ -194,7 +299,7 @@ function renderHistory() {
 }
 
 function handleDeleteHistoryItem(e) {
-  const target = e.target.closest('[data-delete-key], [data-delete-index]');
+  const target = e.target.closest('[data-delete-key], [data-delete-id]');
   if (!target) return;
 
   // Online mode: host can delete by key
@@ -207,14 +312,17 @@ function handleDeleteHistoryItem(e) {
     }
   }
 
-  // Local mode: delete by index
+  // Local mode: delete by id
   if (!state.roomRef) {
-    const index = parseInt(target.dataset.deleteIndex, 10);
-    if (!isNaN(index)) {
-      state.history.splice(index, 1);
-      renderHistory();
-      saveHistory();
-      updatePool();
+    const idToDelete = target.dataset.deleteId;
+    if (idToDelete) {
+      const index = state.history.findIndex(item => item.id === idToDelete);
+      if (index > -1) {
+        state.history.splice(index, 1);
+        renderHistory();
+        saveHistory();
+        updatePool();
+      }
     }
   }
 }
@@ -414,7 +522,7 @@ async function performDraw() {
   if (!finalResults) return;
 
   // 結果をFirebaseに書き込む
-  state.roomRef.child('spinResult').set({
+  await state.roomRef.child('spinResult').set({
     finalResults: finalResults,
     pool: state.pool, // アニメーション用に元のプールも渡す
     timestamp: firebase.database.ServerValue.TIMESTAMP
@@ -427,7 +535,12 @@ async function startSpin() {
   if (state.roomRef) {
     // オンラインモード: ホストのみが抽選を実行
     if (state.isHost) {
-      await performDraw();
+      try {
+        await performDraw();
+      } catch (error) {
+        console.error("Error starting spin:", error);
+        alert(t('error-performing-draw'));
+      }
     }
   } else {
     // ローカルモード
@@ -1011,16 +1124,34 @@ function applyFiltersFromFirebase(filters) {
 
 function initFirebase() {
   try {
-    if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
-    console.warn("Firebase is not configured. Real-time features will be disabled.");
-    setRealtimeUiState('error');
-    return;
-  }
-    // Prevent re-initialization
-    if (!firebase.apps.length) {
-      firebase.initializeApp(firebaseConfig);
+    let defaultDbSet = false;
+    Object.entries(serverList).forEach(([id, server]) => {
+      if (server.config && server.config.apiKey && !server.config.apiKey.startsWith("YOUR_")) {
+        try {
+          // 既に同じ名前で初期化されていないかチェック
+          if (!firebase.apps.some(app => app.name === id)) {
+            const app = firebase.initializeApp(server.config, id);
+            if (!defaultDbSet) {
+              // 最初の有効なDBをデフォルトとしてstate.dbに設定
+              state.db = firebase.database(app);
+              defaultDbSet = true;
+            }
+            state.dbs[id] = firebase.database(app);
+          }
+        } catch (e) {
+          console.error(`Failed to initialize Firebase for server ${id}:`, e);
+        }
+      }
+    });
+
+    if (Object.keys(state.dbs).length === 0) {
+      console.warn("No valid Firebase configuration found. Real-time features will be disabled.");
+      setRealtimeUiState('error');
+      $('#createRoomBtn').disabled = true;
+      $('#joinRoomBtn').disabled = true;
+      return;
     }
-    state.db = firebase.database();
+
     setRealtimeUiState('disconnected');
 
     // URLからルームIDを読み取って自動参加
@@ -1074,49 +1205,48 @@ function closeAdminMenu() {
 }
 
 function kickPlayer(playerId, playerName) {
-    if (!state.isHost || !state.roomRef) return;    
+    if (!state.isHost || state.roomRefs.length === 0) return;
     // プレイヤーにキックされたことを通知
-    state.roomRef.child('notifications').child(playerId).set({
+    writeToAllRooms(`notifications/${playerId}`, {
         type: 'kick',
         hostName: state.playerName,
         timestamp: firebase.database.ServerValue.TIMESTAMP
     });
     const message = t('system-player-kicked', { name: playerName, host: state.playerName });
-    state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
-    state.roomRef.child('clients').child(playerId).remove();
+    pushAndSetToAllRooms('chat', { name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    removeFromAllRooms(`clients/${playerId}`);
 }
 
 function blockPlayer(playerId, playerName) {
-    if (!state.isHost || !state.roomRef) return;    
-    state.roomRef.child('blockedNames').push(playerName);
+    if (!state.isHost || state.roomRefs.length === 0) return;
+    pushAndSetToAllRooms('blockedNames', playerName);
     const message = t('system-player-blocked', { name: playerName, host: state.playerName });
-    state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
-    state.roomRef.child('clients').child(playerId).remove();
+    pushAndSetToAllRooms('chat', { name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    removeFromAllRooms(`clients/${playerId}`);
 }
 
 function banPlayer(playerId, playerName) {
-    if (!state.isHost || !state.roomRef) return;    
+    if (!state.isHost || state.roomRefs.length === 0) return;
     const playerToBan = state.players.find(p => p.id === playerId);
     if (!playerToBan || !playerToBan.ip) return;
 
     // プレイヤーにBANされたことを通知
-    state.roomRef.child('notifications').child(playerId).set({
+    writeToAllRooms(`notifications/${playerId}`, {
         type: 'ban',
         hostName: state.playerName,
         timestamp: firebase.database.ServerValue.TIMESTAMP
     });
 
-    state.roomRef.child('bannedIPs').push(playerToBan.ip);
-    state.roomRef.child('blockedNames').push(playerName); // BANは名前ブロックも兼ねる
+    pushAndSetToAllRooms('bannedIPs', playerToBan.ip);
+    pushAndSetToAllRooms('blockedNames', playerName); // BANは名前ブロックも兼ねる
     const message = t('system-player-banned', { name: playerName, host: state.playerName });
-    state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
-    state.roomRef.child('clients').child(playerId).remove();
+    pushAndSetToAllRooms('chat', { name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    removeFromAllRooms(`clients/${playerId}`);
 }
 
 async function createRoom() { // UIの状態を更新して、処理中であることをユーザーにフィードバック
-  if (!state.db) {
+  if (Object.keys(state.dbs).length === 0) {
     alert("データベースに接続できません。ページをリロードして再度お試しください。");
-    console.error("Firebase Database is not initialized. state.db is null.");
     return;
   }
 
@@ -1139,6 +1269,7 @@ async function createRoom() { // UIの状態を更新して、処理中である
   }
   state.playerName = name;
 
+  const password = generatePassword(); // パスワードを生成
   const ip = await getIPAddress();
   try {
     const roomsRef = state.db.ref('rooms');
@@ -1153,21 +1284,22 @@ async function createRoom() { // UIの状態を更新して、処理中である
     }
 
     state.roomId = newRoomId;
-    state.roomRef = roomsRef.child(state.roomId);
+    state.roomRef = state.db.ref(`rooms/${state.roomId}`);
     await state.roomRef.set({
       createdAt: firebase.database.ServerValue.TIMESTAMP,
       lastActivity: firebase.database.ServerValue.TIMESTAMP,
-      lastSpin: null
+      lastSpin: null,
+      host: state.playerName,
+      password: password,
     });
 
-    state.playerRef = state.roomRef.child('clients').push({
+    state.playerRef = await state.roomRef.child('clients').push({
       name: state.playerName,
       joinedAt: firebase.database.ServerValue.TIMESTAMP,
       ip: ip
     });
-    state.playerRef.onDisconnect().remove();
 
-    listenToRoomChanges();
+    listenToRoomChanges(password);
     // ルーム作成時に現在のフィルター状態を書き込む
     updateFiltersOnFirebase();
   } catch (error) {
@@ -1197,8 +1329,10 @@ async function joinRoom() {
     return;
   }
   const roomId = roomIdInput.value.trim();
-  if (!roomId) {
+  const password = roomPasswordInput.value.trim();
+  if (!roomId || !password) {
     reEnableButtons();
+    showToast(t('error-join-input-required'));
     return;
   }
 
@@ -1216,6 +1350,14 @@ async function joinRoom() {
     }
 
     const roomData = snapshot.val();
+
+    // パスワード検証
+    if (roomData.password && roomData.password !== password) {
+      showToast(t('error-wrong-password'));
+      reEnableButtons();
+      return;
+    }
+
     // Check for room expiration
     if (roomData.lastActivity && (Date.now() - roomData.lastActivity > ROOM_EXPIRATION_MS)) {
         alert(t('realtime-error-expired'));
@@ -1242,13 +1384,11 @@ async function joinRoom() {
         reEnableButtons();
         return;
     }
-
-    state.playerRef = state.roomRef.child('clients').push({
+    state.playerRef = await state.roomRef.child('clients').push({
       name: state.playerName,
       joinedAt: firebase.database.ServerValue.TIMESTAMP,
       ip: ip
     });
-    state.playerRef.onDisconnect().remove();
 
     listenToRoomChanges();
   } catch (error) {
@@ -1281,14 +1421,16 @@ function stopActivityHeartbeat() {
   }
 }
 
-function listenToRoomChanges() {
+function listenToRoomChanges(password = null) {
   if (!state.roomRef) return;
 
   // Start sending heartbeats to keep the room alive
   startActivityHeartbeat();
 
+  const myPlayerId = state.playerRef.key;
+
   // 自分への通知（キック、BANなど）をリッスン
-  const notificationRef = state.roomRef.child('notifications').child(state.playerRef.key);
+  const notificationRef = state.roomRef.child('notifications').child(myPlayerId);
   notificationRef.on('value', (snapshot) => {
     if (!snapshot.exists()) {
       return;
@@ -1342,7 +1484,7 @@ function listenToRoomChanges() {
     state.players = playerArray;
     updatePlayerList(playerArray);
 
-    const me = playerArray.find(p => p.id === state.playerRef?.key);
+    const me = playerArray.find(p => p.id === myPlayerId);
     if (me) {
       const wasHost = state.isHost;
       state.isHost = me.isHost;
@@ -1400,6 +1542,14 @@ function listenToRoomChanges() {
   const url = new URL(window.location);
   url.searchParams.set('room', state.roomId);
   window.history.pushState({}, '', url);
+
+  // パスワード表示の制御
+  if (state.isHost && password) {
+    roomPasswordDisplay.textContent = password;
+    roomPasswordDisplayContainer.style.display = 'flex';
+  } else {
+    roomPasswordDisplayContainer.style.display = 'none';
+  }
 }
 
 function handlePlayerChanges(currentPlayers, previousPlayers) {
@@ -1429,6 +1579,7 @@ function handlePlayerChanges(currentPlayers, previousPlayers) {
 function setRealtimeUiState(uiState) {
     const spinBtn = $('#spinBtn');
     roomJoinUi.style.display = (uiState === 'disconnected' || uiState === 'error') ? 'flex' : 'none';
+    roomPasswordDisplayContainer.style.display = 'none';
     roomInfoUi.style.display = (uiState.startsWith('in_room')) ? 'flex' : 'none';
     const inRoom = uiState.startsWith('in_room');
     const isViewer = uiState === 'in_room_viewer';
@@ -1477,6 +1628,7 @@ function handleLeaveRoom(removeFromDb = true) {
   joinRoomBtn.disabled = false;
   createRoomBtn.textContent = t('realtime-create-btn');
   joinRoomBtn.textContent = t('realtime-join-btn');
+  roomPasswordDisplayContainer.style.display = 'none';
 
   setRealtimeUiState('disconnected');
   updatePlayerList([]);
@@ -1508,8 +1660,6 @@ function sendChatMessage() {
 // --- 初期化とイベントリスナー設定 ------------------------------------
 
 function buildFilterUI() {
-  const allSubs = [...new Set(weapons.map(w => w.sub))].filter(Boolean).sort();
-  const allSps = [...new Set(weapons.map(w => w.sp))].filter(Boolean).sort();
   const classFilters = $('#classFilters');
   // Note: Text content will be set by updateUIText()
   classFilters.innerHTML = `
@@ -1527,7 +1677,7 @@ function buildFilterUI() {
       <strong data-i18n-key="filter-sub"></strong>
       <button type="button" class="btn-filter" data-toggle-all="sub" data-i18n-key="filter-toggle"></button>
     </div>
-    ${allSubs.map(sub =>
+    ${[...new Set(weapons.map(w => w.sub))].filter(Boolean).sort().map(sub =>
       `<label class="chip"><input type="checkbox" data-sub="${sub}" checked> <span data-i18n-key="${sub}">${sub}</span></label>`
     ).join('')}
   </div>
@@ -1536,7 +1686,7 @@ function buildFilterUI() {
       <strong data-i18n-key="filter-special"></strong>
       <button type="button" class="btn-filter" data-toggle-all="sp" data-i18n-key="filter-toggle"></button>
     </div>
-    ${allSps.map(sp =>
+    ${[...new Set(weapons.map(w => w.sp))].filter(Boolean).sort().map(sp =>
       `<label class="chip"><input type="checkbox" data-sp="${sp}" checked> <span data-i18n-key="${sp}">${sp}</span></label>`
     ).join('')}
   </div>
@@ -1549,10 +1699,32 @@ function setupEventListeners() {
   playerCountInput.addEventListener('change', saveSettings);
 
   // Realtime controls
+  playerNameInput.addEventListener('input', updateJoinButtonsState);
+  roomIdInput.addEventListener('input', updateJoinButtonsState);
   createRoomBtn.addEventListener('click', createRoom);
   joinRoomBtn.addEventListener('click', joinRoom);
   leaveRoomBtn.addEventListener('click', () => handleLeaveRoom(true));
-  roomIdDisplay.addEventListener('click', () => navigator.clipboard.writeText(state.roomId));
+  roomIdDisplay.addEventListener('click', () => {
+    navigator.clipboard.writeText(state.roomId)
+      .then(() => {
+        showToast(t('realtime-room-id-copied'));
+      })
+      .catch(err => {
+        console.error('Failed to copy room ID: ', err);
+        showToast(t('error-copy-failed'));
+      });
+  });
+  copyPasswordBtn.addEventListener('click', () => {
+    const password = roomPasswordDisplay.textContent;
+    if (!password) return;
+    navigator.clipboard.writeText(password).then(() => {
+      showToast(t('password-copied'));
+    }).catch(err => {
+      console.error('Failed to copy password: ', err);
+      showToast(t('password-copy-failed'));
+    });
+  });
+
   chatSendBtn.addEventListener('click', sendChatMessage);
   chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
@@ -1639,7 +1811,7 @@ function setupEventListeners() {
       }
       updatePool();
       saveSettings();
-      if (state.isHost) {
+      if (state.isHost && state.roomRef) {
         updateFiltersOnFirebase();
       }
     };
@@ -1655,7 +1827,7 @@ function setupEventListeners() {
   noRepeat.addEventListener('change', () => {
     updatePool();
     saveSettings();
-    if (state.isHost) {
+    if (state.isHost && state.roomRef) {
       updateFiltersOnFirebase();
     }
   });
@@ -1672,7 +1844,7 @@ function setupEventListeners() {
       checkboxes.forEach(cb => cb.checked = newCheckedState);
       updatePool();
       saveSettings();
-      if (state.isHost) {
+      if (state.isHost && state.roomRef) {
         updateFiltersOnFirebase();
       }
     }
@@ -1733,3 +1905,15 @@ function init() {
 }
 
 init();
+
+function updateFiltersOnFirebase() {
+  if (!state.isHost || !state.roomRef) return;
+
+  const filters = {
+    class: $$('input[data-class]').reduce((acc, cb) => ({ ...acc, [cb.dataset.class]: cb.checked }), {}),
+    sub: $$('input[data-sub]').reduce((acc, cb) => ({ ...acc, [cb.dataset.sub]: cb.checked }), {}),
+    sp: $$('input[data-sp]').reduce((acc, cb) => ({ ...acc, [cb.dataset.sp]: cb.checked }), {}),
+    noRepeat: noRepeat.checked,
+  };
+  state.roomRef.child('filters').set(filters);
+}
