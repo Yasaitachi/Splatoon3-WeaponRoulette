@@ -77,8 +77,8 @@ const state = {
   // Firebase state
   dbs: {}, // { server1: db1, server2: db2, ... }
   db: null, // The currently active DB instance
-  roomRef: null,
-  playerRef: null,
+  roomRefs: [], // Array of refs to the current room across all DBs
+  playerRefs: [], // Array of refs to the current player across all DBs
   roomId: null,
   isHost: false,
   playerName: '',
@@ -128,6 +128,40 @@ const roomListEmpty = $('#room-list-empty');
 const loaderOverlay = $('#loader-overlay');
 const passwordCheckbox = $('#passwordCheckbox');
 const roomPasswordInput = $('#roomPasswordInput');
+
+// --- Firebase Helper Functions for Multi-DB ---
+
+// Writes the same data to the same path in all configured roomRefs.
+async function writeToAllRooms(path, data) {
+    if (!state.roomRefs || state.roomRefs.length === 0) return;
+    const promises = state.roomRefs.map(ref => ref.child(path).set(data));
+    await Promise.all(promises);
+}
+
+// Removes data from a specific path in all configured roomRefs.
+async function removeFromAllRooms(path) {
+    if (!state.roomRefs || state.roomRefs.length === 0) return;
+    const promises = state.roomRefs.map(ref => ref.child(path).remove());
+    await Promise.all(promises);
+}
+
+// Pushes data to a list path, creating a new unique ID that is the same across all DBs.
+// Returns an array of references to the newly created data across all DBs.
+async function pushToAllRoomsAndGetRefs(path, data) {
+    if (!state.roomRefs || state.roomRefs.length === 0) return [];
+    
+    // Use the primary DB to generate a new key.
+    const primaryRoomRef = state.roomRef; // Assumes state.roomRef is the primary
+    const newRef = primaryRoomRef.child(path).push();
+    const newKey = newRef.key;
+
+    const dataWithTimestamp = { ...data, timestamp: firebase.database.ServerValue.TIMESTAMP };
+    const promises = state.roomRefs.map(ref => ref.child(path).child(newKey).set(dataWithTimestamp));
+    await Promise.all(promises);
+
+    // Return an array of references to the new data in each DB.
+    return state.roomRefs.map(ref => ref.child(path).child(newKey));
+}
 
 // --- アプリケーションロジック ----------------------------------------------
 
@@ -240,7 +274,7 @@ function pushHistoryItem(weapon, batchTime, playerNum, totalPlayers) {
 }
 
 function renderHistory() {
-  const isOnline = !!state.roomRef;
+  const isOnline = !!state.roomRef; // state.roomRef is the primary ref
   const historyArray = [...state.history].sort((a, b) => a.time.localeCompare(b.time));
   const totalItems = historyArray.length;
   const batchIds = new Set(historyArray.map(h => h.time));
@@ -292,7 +326,7 @@ function handleDeleteHistoryItem(e) {
   if (!target) return;
 
   // Online mode: host can delete by key
-  if (state.roomRef && state.isHost) {
+  if (state.roomRefs.length > 0 && state.isHost) {
     const key = target.dataset.deleteKey;
     if (key) {
       state.roomRef.child('history').child(key).remove();
@@ -302,7 +336,7 @@ function handleDeleteHistoryItem(e) {
   }
 
   // Local mode: delete by id
-  if (!state.roomRef) {
+  if (state.roomRefs.length === 0) {
     const idToDelete = target.dataset.deleteId;
     if (idToDelete) {
       const index = state.history.findIndex(item => item.id === idToDelete);
@@ -330,7 +364,7 @@ function setControlsDisabled(disabled) {
   }
 
   // When enabling, restore state based on role.
-  if (state.roomRef) {
+  if (state.roomRefs.length > 0) {
     // In a room, restore state based on host/viewer role
     setRealtimeUiState(state.isHost ? 'in_room_host' : 'in_room_viewer');
   } else {
@@ -434,7 +468,7 @@ async function displaySpinResult(finalResults, pool) {
   setControlsDisabled(true);
 
   const playerCount = finalResults.length;
-  const isOnline = !!state.roomRef;
+  const isOnline = state.roomRefs.length > 0;
 
   if (playerCount === 1) {
       const result = finalResults[0];
@@ -464,7 +498,7 @@ async function displaySpinResult(finalResults, pool) {
       const drawTime = new Date().toISOString();
       if (isOnline) {
           // Online mode: only host writes history and sends notifications
-          if (state.isHost) {
+          if (state.isHost && state.roomRef) {
               const historyRef = state.roomRef.child('history');
               for (let i = 0; i < finalResults.length; i++) {
                   const result = finalResults[i];
@@ -504,14 +538,14 @@ async function displaySpinResult(finalResults, pool) {
 }
 
 async function performDraw() {
-  if (state.running || !state.isHost || !state.roomRef) return;
+  if (state.running || !state.isHost || state.roomRefs.length === 0) return;
 
   updatePool();
   const finalResults = getDrawResults();
   if (!finalResults) return;
 
   // 結果をFirebaseに書き込む
-  await state.roomRef.child('spinResult').set({
+  await writeToAllRooms('spinResult', {
     finalResults: finalResults,
     pool: state.pool, // アニメーション用に元のプールも渡す
     timestamp: firebase.database.ServerValue.TIMESTAMP
@@ -521,7 +555,7 @@ async function performDraw() {
 async function startSpin() {
   if (state.running) return;
 
-  if (state.roomRef) {
+  if (state.roomRefs.length > 0) {
     // オンラインモード: ホストのみが抽選を実行
     if (state.isHost) {
       try {
@@ -639,7 +673,7 @@ async function copyResultToClipboard(results) {
  * 抽選結果をDiscord Webhookに送信する
  * @param {Array<Object>} results - 抽選結果のブキオブジェクトの配列
  */
-async function sendToDiscord(results) {
+async function sendToDiscord(results, isTest = false) {
   const webhookEnable = $('#webhookEnable');
   const webhookUrl = $('#webhookUrl');
   if (!webhookEnable?.checked || !webhookUrl?.value) {
@@ -652,60 +686,56 @@ async function sendToDiscord(results) {
   const mentionIds = ($('#webhookMentions')?.value ?? '').split(',').map(id => id.trim()).filter(id => id);
   const mentionContent = mentionIds.map(id => `<@${id}>`).join(' ');
 
-  let payload;
+  let payload = {};
 
-  if (playerCount > 1) {
-    // 複数人の場合：1人1つのEmbedを作成
-    const embeds = results.map((w, i) => {
-      const playerIdentifier = t('player-result-list', { i: i + 1 });
-      const embed = {
-        author: {
-          name: `${playerIdentifier}: ${getWeaponName(w)}`,
-        },
-        description: `${t(w.class)} / ${t(w.sub)} / ${t(w.sp)}`,
-        color: 0xef5350,
+  if (isTest) {
+      payload = {
+          content: `${t('webhook-test-content')} ${mentionContent}`,
+          embeds: [{
+              title: '✅ 接続テスト',
+              description: 'このメッセージが表示されれば、Webhookの設定は正常です！',
+              color: 0x4caf50,
+              footer: { text: 'Splatoon 3 Weapon Roulette' },
+          }],
       };
-
-      // 最後のEmbedにだけタイムスタンプとフッターを追加
-      if (i === results.length - 1) {
-        embed.timestamp = new Date().toISOString();
-        embed.footer = { text: 'Splatoon 3 Weapon Roulette' };
-      }
-      return embed;
-    });
-
-    payload = {
-      content: mentionContent,
-      embeds: embeds,
-    };
   } else {
-    // 1人の場合：これまで通りの単一Embed
-    let description = '';
-    const w = results[0];
-    if (template) {
-      const weaponList = `${getWeaponName(w)} (${t(w.class)} / ${t(w.sub)} / ${t(w.sp)})`;
-      description = template
-        .replace('{playerCount}', 1)
-        .replace('{weaponList}', weaponList);
-    }
+      if (playerCount > 1) {
+          // 複数人の場合：1人1つのEmbedを作成
+          const embeds = results.map((w, i) => {
+              const playerIdentifier = t('player-result-list', { i: i + 1 });
+              const embed = {
+                  author: {
+                      name: `${playerIdentifier}: ${getWeaponName(w)}`,
+                  },
+                  description: `${t(w.class)} / ${t(w.sub)} / ${t(w.sp)}`,
+                  color: 0xef5350,
+              };
 
-    const embed = {
-      title: t('webhook-result-title', { playerCount }),
-      description: description,
-      color: 0xef5350,
-      fields: results.map(w => ({
-        name: getWeaponName(w),
-        value: `${t(w.class)} / ${t(w.sub)} / ${t(w.sp)}`,
-      })),
-      timestamp: new Date().toISOString(),
-      footer: {
-        text: 'Splatoon 3 Weapon Roulette',
-      },
-    };
-    payload = {
-      content: mentionContent,
-      embeds: [embed],
-    };
+              if (i === results.length - 1) {
+                  embed.timestamp = new Date().toISOString();
+                  embed.footer = { text: 'Splatoon 3 Weapon Roulette' };
+              }
+              return embed;
+          });
+          payload = { content: mentionContent, embeds: embeds };
+      } else {
+          // 1人の場合
+          const w = results[0];
+          const weaponList = `${getWeaponName(w)} (${t(w.class)} / ${t(w.sub)} / ${t(w.sp)})`;
+          const description = template ? template.replace('{playerCount}', 1).replace('{weaponList}', weaponList) : '';
+
+          payload = {
+              content: mentionContent,
+              embeds: [{
+                  title: t('webhook-result-title', { playerCount }),
+                  description: description,
+                  color: 0xef5350,
+                  fields: [{ name: getWeaponName(w), value: `${t(w.class)} / ${t(w.sub)} / ${t(w.sp)}` }],
+                  timestamp: new Date().toISOString(),
+                  footer: { text: 'Splatoon 3 Weapon Roulette' },
+              }],
+          };
+      }
   }
 
   try {
@@ -718,13 +748,17 @@ async function sendToDiscord(results) {
     });
 
     if (!response.ok) {
-      console.error('Discord Webhookへの送信に失敗しました:', response.status, await response.text());
-      alert(t('webhook-send-error'));
+      const errorText = await response.text();
+      console.error('Discord Webhookへの送信に失敗しました:', response.status, errorText);
+      if (!isTest) alert(t('webhook-send-error'));
+      return false;
     }
   } catch (error) {
     console.error('Discord Webhookへの送信中にエラーが発生しました:', error);
-    alert(t('webhook-send-error'));
+    if (!isTest) alert(t('webhook-send-error'));
+    return false;
   }
+  return true;
 }
 
 function resetAll() {
@@ -735,7 +769,7 @@ function resetAll() {
   
   $$('#classFilters input[type="checkbox"]').forEach(i => i.checked = true);
 
-  if (state.isHost && state.roomRef) {
+  if (state.isHost && state.roomRefs.length > 0) {
     state.roomRef.child('history').remove();
   } else if (!state.roomRef) { // ローカルモードの場合のみ
     state.history = [];
@@ -981,8 +1015,6 @@ async function testDiscordWebhook() {
   const webhookUrlInput = $('#webhookUrl');
   const testBtn = $('#testWebhookBtn');
   const url = webhookUrlInput.value;
-  const mentionIds = ($('#webhookMentions')?.value ?? '').split(',').map(id => id.trim()).filter(id => id);
-  const mentionContent = mentionIds.length > 0 ? mentionIds.map(id => `<@${id}>`).join(' ') : '';
 
   if (!url) {
     alert(t('settings-webhook-test-no-url'));
@@ -990,28 +1022,16 @@ async function testDiscordWebhook() {
   }
 
   testBtn.disabled = true;
-  const originalText = testBtn.textContent;
   testBtn.textContent = t('settings-webhook-test-sending');
 
-  const embed = {
-    title: '✅ 接続テスト',
-    description: 'このメッセージが表示されれば、Webhookの設定は正常です！',
-    color: 0x4caf50, // Green
-    footer: { text: 'Splatoon 3 Weapon Roulette' },
-  };
-
   try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: `${t('webhook-test-content')} ${mentionContent}`, embeds: [embed] }),
-    });
-    alert(response.ok ? t('settings-webhook-test-success') : t('settings-webhook-test-fail'));
+    const success = await sendToDiscord([], true);
+    alert(success ? t('settings-webhook-test-success') : t('settings-webhook-test-fail'));
   } catch (error) {
     alert(t('settings-webhook-test-fail'));
   } finally {
     testBtn.disabled = false;
-    testBtn.textContent = originalText;
+    testBtn.textContent = t('settings-webhook-test-send');
   }
 }
 
@@ -1022,7 +1042,7 @@ function updatePlayerList(players) {
     return;
   }
   playerListEl.innerHTML = players.map(player => {
-      const isMe = state.playerRef && player.id === state.playerRef.key;
+      const isMe = state.playerRefs.length > 0 && player.id === state.playerRefs[0].key;
       const meIndicator = isMe ? ` <span class="my-indicator" title="${t('realtime-you')}">👤</span>` : '';
       const hostIndicator = player.isHost ? ` <span class="host-icon" title="${t('realtime-host')}">👑</span>` : '';
       
@@ -1068,7 +1088,7 @@ function addChatMessage(name, message, isSystem = false) {
  * 現在のフィルター設定をFirebaseに保存する（ホスト専用）
  */
 function updateFiltersOnFirebase() {
-  if (!state.isHost || !state.roomRef) return;
+  if (!state.isHost || state.roomRefs.length === 0) return;
 
   const filters = {
     class: $$('input[data-class]').reduce((acc, cb) => ({ ...acc, [cb.dataset.class]: cb.checked }), {}),
@@ -1077,7 +1097,7 @@ function updateFiltersOnFirebase() {
     noRepeat: noRepeat.checked,
   };
 
-  state.roomRef.child('filters').set(filters);
+  writeToAllRooms('filters', filters);
 }
 
 /**
@@ -1188,7 +1208,7 @@ function closeAdminMenu() {
 }
 
 function kickPlayer(playerId, playerName) {
-    if (!state.isHost || state.roomRefs.length === 0) return;
+    if (!state.isHost || !state.roomRefs || state.roomRefs.length === 0) return;
     // プレイヤーにキックされたことを通知
     writeToAllRooms(`notifications/${playerId}`, {
         type: 'kick',
@@ -1196,15 +1216,15 @@ function kickPlayer(playerId, playerName) {
         timestamp: firebase.database.ServerValue.TIMESTAMP
     });
     const message = t('system-player-kicked', { name: playerName, host: state.playerName });
-    pushAndSetToAllRooms('chat', { name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    pushToAllRoomsAndGetRefs('chat', { name: null, message, isSystem: true });
     removeFromAllRooms(`clients/${playerId}`);
 }
 
 function blockPlayer(playerId, playerName) {
-    if (!state.isHost || state.roomRefs.length === 0) return;
-    pushAndSetToAllRooms('blockedNames', playerName);
+    if (!state.isHost || !state.roomRefs || state.roomRefs.length === 0) return;
+    pushToAllRoomsAndGetRefs('blockedNames', playerName);
     const message = t('system-player-blocked', { name: playerName, host: state.playerName });
-    pushAndSetToAllRooms('chat', { name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    pushToAllRoomsAndGetRefs('chat', { name: null, message, isSystem: true });
     removeFromAllRooms(`clients/${playerId}`);
 }
 
@@ -1220,10 +1240,10 @@ function banPlayer(playerId, playerName) {
         timestamp: firebase.database.ServerValue.TIMESTAMP
     });
 
-    pushAndSetToAllRooms('bannedIPs', playerToBan.ip);
-    pushAndSetToAllRooms('blockedNames', playerName); // BANは名前ブロックも兼ねる
+    pushToAllRoomsAndGetRefs('bannedIPs', playerToBan.ip);
+    pushToAllRoomsAndGetRefs('blockedNames', playerName); // BANは名前ブロックも兼ねる
     const message = t('system-player-banned', { name: playerName, host: state.playerName });
-    pushAndSetToAllRooms('chat', { name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    pushToAllRoomsAndGetRefs('chat', { name: null, message, isSystem: true });
     removeFromAllRooms(`clients/${playerId}`);
 }
 
@@ -1252,9 +1272,6 @@ async function createRoom() { // UIの状態を更新して、処理中である
   }
   state.playerName = name;
 
-  // Find the least loaded server to create the room on
-  const dbInstances = state.dbs;
-
   // パスワード関連のチェック
   const isPasswordProtected = passwordCheckbox.checked;
   const password = roomPasswordInput.value;
@@ -1265,9 +1282,8 @@ async function createRoom() { // UIの状態を更新して、処理中である
     return;
   }
 
-  // 部屋IDに英字も使えるように入力パターンを緩和
-  roomIdInput.pattern = '.*';
-
+  // Find the least loaded server to create the room on
+  const dbInstances = state.dbs;
   const roomCounts = await Promise.all(
       Object.values(dbInstances).map(db => 
           db.ref('rooms').once('value').then(snap => snap.numChildren()).catch(() => Infinity)
@@ -1381,6 +1397,7 @@ async function joinRoom() {
   state.db = targetDb;
   state.roomId = roomId;
   state.roomRef = state.db.ref(`rooms/${roomId}`);
+  state.roomRefs = Object.values(state.dbs).map(db => db.ref(`rooms/${state.roomId}`));
   const roomData = roomSnapshot.val();
 
   // パスワードチェック
@@ -1390,6 +1407,8 @@ async function joinRoom() {
       reEnableButtons();
       return;
     }
+    // This is a simple plain text comparison.
+    // For production, a more secure method (e.g., hashing with a server-side function) is recommended.
     if (inputPassword !== roomData.password) {
       alert(t('realtime-password-incorrect'));
       reEnableButtons();
@@ -1399,7 +1418,6 @@ async function joinRoom() {
   const ip = await getIPAddress();
 
   try {
-    const roomData = roomSnapshot.val();
     // Check for room expiration
     if (roomData.lastActivity && (Date.now() - roomData.lastActivity > ROOM_EXPIRATION_MS)) {
         alert(t('realtime-error-expired'));
@@ -1426,10 +1444,8 @@ async function joinRoom() {
         reEnableButtons();
         return;
     }
-    state.roomRefs = Object.values(state.dbs).map(db => db.ref(`rooms/${state.roomId}`));
     state.playerRefs = await pushToAllRoomsAndGetRefs('clients', {
       name: state.playerName,
-      joinedAt: firebase.database.ServerValue.TIMESTAMP,
       ip: ip
     });
 
@@ -1640,20 +1656,22 @@ function setRealtimeUiState(uiState) {
 }
 
 function handleLeaveRoom(removeFromDb = true) {
-  if (removeFromDb && state.playerRef) {
-    state.playerRef.onDisconnect().cancel();
-    state.playerRef.remove();
+  if (removeFromDb && state.playerRefs && state.playerRefs.length > 0) {
+    state.playerRefs.forEach(ref => {
+        ref.onDisconnect().cancel();
+        ref.remove();
+    });
   }
 
-  if (state.roomRef) {
-    state.roomRef.off(); // 全てのリスナーを解除
+  if (state.roomRefs.length > 0) {
+    state.roomRefs.forEach(ref => ref.off()); // 全てのリスナーを解除
   }
 
   // Stop sending heartbeats
   stopActivityHeartbeat();
 
-  state.roomRef = null;
-  state.playerRef = null;
+  state.roomRefs = [];
+  state.playerRefs = [];
   state.roomId = null;
   state.isHost = false;
 
@@ -1679,12 +1697,8 @@ function handleLeaveRoom(removeFromDb = true) {
 
 function sendChatMessage() {
   const message = chatInput.value.trim();
-  if (message && state.roomRef) {
-    state.roomRef.child('chat').push({
-      name: state.playerName,
-      message: message,
-      timestamp: firebase.database.ServerValue.TIMESTAMP
-    });
+  if (message && state.roomRefs.length > 0) {
+    pushToAllRoomsAndGetRefs('chat', { name: state.playerName, message: message });
     chatInput.value = '';
   }
 }
@@ -1692,7 +1706,6 @@ function sendChatMessage() {
 async function showRoomList() {
   roomListModal.style.display = 'flex';
   roomListTableBody.innerHTML = ''; // Clear previous list
-  roomListEmpty.style.display = 'none';
   showLoader(true);
 
   try {
@@ -1743,6 +1756,18 @@ async function showRoomList() {
     showLoader(false);
     updateUIText(); // To translate dynamically added buttons
   }
+}
+
+async function joinRoomById(roomId) {
+    if (!roomId) return;
+    const name = playerNameInput.value.trim();
+    if (!name) {
+        alert(t('player-name-required'));
+        return;
+    }
+    roomIdInput.value = roomId;
+    closeRoomListModal();
+    await joinRoom();
 }
 
 function closeRoomListModal() {
@@ -1923,7 +1948,7 @@ function setupEventListeners() {
   noRepeat.addEventListener('change', () => {
     updatePool();
     saveSettings();
-    if (state.isHost && state.roomRef) {
+    if (state.isHost && state.roomRefs.length > 0) {
       updateFiltersOnFirebase();
     }
   });
@@ -1940,7 +1965,7 @@ function setupEventListeners() {
       checkboxes.forEach(cb => cb.checked = newCheckedState);
       updatePool();
       saveSettings();
-      if (state.isHost && state.roomRef) {
+      if (state.isHost && state.roomRefs.length > 0) {
         updateFiltersOnFirebase();
       }
     }
@@ -2003,7 +2028,7 @@ function init() {
 init();
 
 function updateFiltersOnFirebase() {
-  if (!state.isHost || !state.roomRef) return;
+  if (!state.isHost || state.roomRefs.length === 0) return;
 
   const filters = {
     class: $$('input[data-class]').reduce((acc, cb) => ({ ...acc, [cb.dataset.class]: cb.checked }), {}),
@@ -2011,5 +2036,5 @@ function updateFiltersOnFirebase() {
     sp: $$('input[data-sp]').reduce((acc, cb) => ({ ...acc, [cb.dataset.sp]: cb.checked }), {}),
     noRepeat: noRepeat.checked,
   };
-  state.roomRef.child('filters').set(filters);
+  writeToAllRooms('filters', filters);
 }
