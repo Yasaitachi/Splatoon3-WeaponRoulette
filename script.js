@@ -126,6 +126,8 @@ const closeRoomListBtn = $('#closeRoomListBtn');
 const roomListTableBody = $('#roomListTableBody');
 const roomListEmpty = $('#room-list-empty');
 const loaderOverlay = $('#loader-overlay');
+const passwordCheckbox = $('#passwordCheckbox');
+const roomPasswordInput = $('#roomPasswordInput');
 
 // --- アプリケーションロジック ----------------------------------------------
 
@@ -1252,6 +1254,20 @@ async function createRoom() { // UIの状態を更新して、処理中である
 
   // Find the least loaded server to create the room on
   const dbInstances = state.dbs;
+
+  // パスワード関連のチェック
+  const isPasswordProtected = passwordCheckbox.checked;
+  const password = roomPasswordInput.value;
+
+  if (isPasswordProtected && !password) {
+    alert(t('realtime-password-required'));
+    reEnableButtons();
+    return;
+  }
+
+  // 部屋IDに英字も使えるように入力パターンを緩和
+  roomIdInput.pattern = '.*';
+
   const roomCounts = await Promise.all(
       Object.values(dbInstances).map(db => 
           db.ref('rooms').once('value').then(snap => snap.numChildren()).catch(() => Infinity)
@@ -1282,7 +1298,7 @@ async function createRoom() { // UIの状態を更新して、処理中である
 
     // 衝突しない12桁の数字のIDを生成する
     while (roomExists) {
-      newRoomId = Math.floor(100000000000 + Math.random() * 900000000000).toString();
+      newRoomId = Math.random().toString(36).slice(2, 8).toUpperCase() + Math.random().toString(36).slice(2, 8).toUpperCase();
       const snapshot = await roomsRef.child(newRoomId).once('value');
       roomExists = snapshot.exists();
     }
@@ -1294,6 +1310,9 @@ async function createRoom() { // UIの状態を更新して、処理中である
       lastActivity: firebase.database.ServerValue.TIMESTAMP,
       lastSpin: null,
       host: state.playerName,
+      public: !isPasswordProtected,
+      hasPassword: isPasswordProtected,
+      password: isPasswordProtected ? password : null,
     });
 
     state.playerRefs = await pushToAllRoomsAndGetRefs('clients', {
@@ -1331,7 +1350,7 @@ async function joinRoom() {
     reEnableButtons();
     return;
   }
-  const roomId = roomIdInput.value.trim();
+  const roomId = roomIdInput.value.trim().toUpperCase();
   if (!roomId) {
     alert(t('realtime-enter-room-id-alert'));
     reEnableButtons();
@@ -1362,6 +1381,21 @@ async function joinRoom() {
   state.db = targetDb;
   state.roomId = roomId;
   state.roomRef = state.db.ref(`rooms/${roomId}`);
+  const roomData = roomSnapshot.val();
+
+  // パスワードチェック
+  if (roomData.hasPassword) {
+    const inputPassword = prompt(t('realtime-password-prompt'));
+    if (inputPassword === null) { // キャンセルされた場合
+      reEnableButtons();
+      return;
+    }
+    if (inputPassword !== roomData.password) {
+      alert(t('realtime-password-incorrect'));
+      reEnableButtons();
+      return;
+    }
+  }
   const ip = await getIPAddress();
 
   try {
@@ -1696,6 +1730,11 @@ async function showRoomList() {
         `;
       }).join('');
     }
+
+    // 動的に生成されたボタンにイベントリスナーを追加
+    $$('.join-from-list-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => joinRoomById(e.target.dataset.roomId));
+    });
   } catch (error) {
     console.error("Error fetching room list:", error);
     roomListEmpty.textContent = t('error-fetch-room-list');
@@ -1754,6 +1793,14 @@ function setupEventListeners() {
   // Realtime controls
   playerNameInput.addEventListener('input', updateJoinButtonsState);
   roomIdInput.addEventListener('input', updateJoinButtonsState);
+  // パスワード入力欄の表示/非表示
+  if (passwordCheckbox && roomPasswordInput) {
+    passwordCheckbox.addEventListener('change', () => {
+      roomPasswordInput.style.display = passwordCheckbox.checked ? 'inline-block' : 'none';
+      if (!passwordCheckbox.checked) roomPasswordInput.value = '';
+    });
+  }
+
   createRoomBtn.addEventListener('click', createRoom);
   joinRoomBtn.addEventListener('click', joinRoom);
   leaveRoomBtn.addEventListener('click', () => handleLeaveRoom(true));

@@ -14,7 +14,7 @@
         <div id="room-join-ui">
           <strong data-i18n-key="realtime-title"></strong>
           <input type="text" id="playerNameInput" class="input-text" data-i18n-placeholder="realtime-player-name-placeholder" maxlength="20">
-          <input type="text" id="roomIdInput" class="input-text" data-i18n-placeholder="realtime-join-placeholder" maxlength="12" pattern="[0-9]*" inputmode="numeric">
+          <input type="text" id="roomIdInput" class="input-text" data-i18n-placeholder="realtime-join-placeholder" maxlength="12">
           <button id="joinRoomBtn" class="btn secondary" data-i18n-key="realtime-join-btn"></button>
           <span class="muted" style="margin: 0 4px;" data-i18n-key="or">or</span>
           <button id="createRoomBtn" class="btn secondary" data-i18n-key="realtime-create-btn"></button>
@@ -22,6 +22,7 @@
             <input id="passwordCheckbox" type="checkbox">
             <span data-i18n-key="realtime-password-room">パスワード付き</span>
           </label>
+          <input type="password" id="roomPasswordInput" class="input-text" data-i18n-placeholder="realtime-password-placeholder" style="display: none;" maxlength="20">
           <button id="findRoomBtn" class="btn secondary" data-i18n-key="realtime-find-btn">部屋を探す</button>
         </div>
         <div id="room-info-ui" style="display: none;">
@@ -192,8 +193,8 @@
             <table id="roomListTable">
               <thead>
                 <tr>
-                  <th data-i18n-key="room-list-header-id">部屋ID</th>
-                  <th></th>
+                  <th data-i18n-key="room-list-header-id" style="width: 20%;">部屋ID</th>
+                  <th style="width: 5%;"></th>
                   <th data-i18n-key="room-list-header-players">参加人数</th>
                   <th data-i18n-key="room-list-header-created">作成日時</th>
                   <th></th>
