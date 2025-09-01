@@ -517,35 +517,6 @@ input:checked + .slider:before {
   margin: 4px 0;
 }
 
-/* Room List Modal */
-#roomListTable {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 14px;
-}
-#roomListTable th, #roomListTable td {
-  padding: 10px 12px;
-  text-align: left;
-  border-bottom: 1px solid var(--card-border);
-}
-#roomListTable th {
-  font-weight: 600;
-  color: var(--muted);
-  font-size: 12px;
-}
-#roomListTable tbody tr:hover { background-color: var(--history-item-bg); }
-.room-list-join-btn-col { text-align: right; }
-.my-indicator {
-  display: inline-block;
-  margin-left: 6px;
-}
-.lock-icon {
-  font-size: 12px;
-  opacity: 0.7;
-  display: inline-block;
-  margin-left: 4px;
-}
-
 /* Realtime Controls */
 #realtime-controls {
   display: flex;
@@ -556,7 +527,6 @@ input:checked + .slider:before {
 #realtime-controls .input-text { padding: 6px 10px; font-size: 14px; }
 #realtime-controls #playerNameInput { width: 180px; }
 #realtime-controls #roomIdInput { width: 160px; }
-#realtime-controls #roomPasswordInput { width: 160px; }
 #realtime-controls .btn { padding: 6px 12px; font-size: 14px; }
 #room-info-ui { display: flex; align-items: center; gap: 8px; }
 #roomIdDisplay { font-weight: bold; background: rgba(0,0,0,.2); padding: 2px 6px; border-radius: 4px; user-select: all; cursor: pointer; }
