@@ -1715,7 +1715,7 @@ async function showRoomList() {
       const rooms = snapshot.val() || {};
       for (const [roomId, roomData] of Object.entries(rooms)) {
         // パスワード付きは表示しない & 有効期限切れを除外
-        if (roomData.public && roomData.lastActivity && (Date.now() - roomData.lastActivity < ROOM_EXPIRATION_MS) && !allRooms.has(roomId)) {
+        if (roomData.lastActivity && (Date.now() - roomData.lastActivity < ROOM_EXPIRATION_MS) && !allRooms.has(roomId)) {
           allRooms.set(roomId, roomData);
         }
       }
