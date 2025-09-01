@@ -3,7 +3,7 @@ const translations = {
     // Realtime
     'realtime-title': 'リアルタイム連携',
     'realtime-player-name-placeholder': 'オンラインプレイで表示される名前',
-    'realtime-join-placeholder': '12桁のルームID', // 修正済み
+    'realtime-room-id-placeholder': 'ルームID',
     'realtime-join-btn': '参加',
     'realtime-joining-btn': '参加中...',
     'realtime-leave-btn': '退出する',
@@ -12,12 +12,19 @@ const translations = {
     'realtime-error-create': 'ルームの作成に失敗しました。',
     'realtime-error-join': 'ルームへの参加に失敗しました。',
     'realtime-room-id': 'ルームID:',
+    'realtime-password-placeholder': 'パスワード',
+    'realtime-password': 'パスワード:',
     'realtime-copy-id': 'IDをコピー',
     'realtime-copy-id-success': 'ルームIDをコピーしました！',
+    'copy-password': 'パスワードをコピー',
     'realtime-host': 'ホスト',
     'realtime-error-connect': 'ルームに接続できませんでした。IDが正しいか確認してください。',
     'realtime-you': 'あなた',
     'realtime-reconnecting': 'サーバーに再接続しています...',
+    'error-join-input-required': 'ルームIDとパスワードを入力してください。',
+    'error-wrong-password': 'パスワードが違います。',
+    'password-copied': 'パスワードをクリップボードにコピーしました。',
+    'password-copy-failed': 'パスワードのコピーに失敗しました。',
 
     // Header & Controls
     'app-title': 'スプラ3 ブキルーレット',
@@ -136,7 +143,7 @@ const translations = {
     // Realtime
     'realtime-title': 'Real-time Sync',
     'realtime-player-name-placeholder': 'Name used for online play',
-    'realtime-join-placeholder': '12-digit Room ID', // Corrected
+    'realtime-room-id-placeholder': 'Room ID',
     'realtime-join-btn': 'Join',
     'realtime-joining-btn': 'Joining...',
     'realtime-leave-btn': 'Leave Room',
@@ -145,8 +152,11 @@ const translations = {
     'realtime-error-create': 'Failed to create room.',
     'realtime-error-join': 'Failed to join room.',
     'realtime-room-id': 'Room ID:',
+    'realtime-password-placeholder': 'Password',
+    'realtime-password': 'Password:',
     'realtime-copy-id': 'Copy ID',
     'realtime-copy-id-success': 'Room ID copied!',
+    'copy-password': 'Copy Password',
     'realtime-host': 'Host',
     'realtime-error-connect': 'Could not connect to the room. Please check the ID and try again.',
     'realtime-you': 'You',
@@ -181,6 +191,10 @@ const translations = {
     'error-failed-draw': 'Failed to draw a weapon.',
     'error-copy-failed': 'Failed to copy result to clipboard.',
     'error-loading-weapons': 'Failed to load weapon data.',
+    'error-join-input-required': 'Please enter Room ID and Password.',
+    'error-wrong-password': 'Incorrect password.',
+    'password-copied': 'Password copied to clipboard.',
+    'password-copy-failed': 'Failed to copy password.',
 
     // Filters
     'filter-title': 'Filter Weapons',
