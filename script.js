@@ -861,41 +861,47 @@ function saveSettings() {
 
 function loadAndApplySettings() {
   const saved = localStorage.getItem('splaRouletteSettings');
-  if (!saved) return;
-  try {
-    const settings = JSON.parse(saved);
-    $$('input[data-class]').forEach(cb => { if (settings.class?.[cb.dataset.class] !== undefined) cb.checked = settings.class[cb.dataset.class]; });
-    $$('input[data-sub]').forEach(cb => { if (settings.sub?.[cb.dataset.sub] !== undefined) cb.checked = settings.sub[cb.dataset.sub]; });
-    $$('input[data-sp]').forEach(cb => { if (settings.sp?.[cb.dataset.sp] !== undefined) cb.checked = settings.sp[cb.dataset.sp]; });
-    noRepeat.checked = settings.noRepeat ?? false;
-    playerCountInput.value = settings.playerCount ?? 1;
-    setLanguage(settings.lang || navigator.language.startsWith('ja') ? 'ja' : 'en');
-    applyTheme(settings.theme || 'system');
-    const webhookEnable = $('#webhookEnable');
-    const webhookUrl = $('#webhookUrl');
-    if (webhookEnable) {
-      webhookEnable.checked = settings.webhookEnabled ?? false;
+  let settings = {};
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      if (parsed && typeof parsed === 'object') {
+        settings = parsed;
+      }
+    } catch (e) {
+      console.error("Failed to load settings:", e);
+      localStorage.removeItem('splaRouletteSettings');
     }
-    if (webhookUrl) {
-      webhookUrl.value = settings.webhookUrl ?? '';
-    }
-    const webhookTemplate = $('#webhookTemplate');
-    if (webhookTemplate) {
-      webhookTemplate.value = settings.webhookTemplate ?? '';
-    }
-    const webhookMentions = $('#webhookMentions');
-    if (webhookMentions) {
-      webhookMentions.value = settings.webhookMentions ?? '';
-    }
-    const autoCopy = $('#autoCopy');
-    if (autoCopy) {
-      autoCopy.checked = settings.autoCopy ?? false;
-    }
-    toggleWebhookUrlState(); // Webhook設定のUI状態を更新
-  } catch (e) {
-    console.error("Failed to load settings:", e);
-    localStorage.removeItem('splaRouletteSettings');
   }
+
+  $$('input[data-class]').forEach(cb => { if (settings.class?.[cb.dataset.class] !== undefined) cb.checked = settings.class[cb.dataset.class]; });
+  $$('input[data-sub]').forEach(cb => { if (settings.sub?.[cb.dataset.sub] !== undefined) cb.checked = settings.sub[cb.dataset.sub]; });
+  $$('input[data-sp]').forEach(cb => { if (settings.sp?.[cb.dataset.sp] !== undefined) cb.checked = settings.sp[cb.dataset.sp]; });
+  noRepeat.checked = settings.noRepeat ?? false;
+  playerCountInput.value = settings.playerCount ?? 1;
+  setLanguage(settings.lang || (navigator.language.startsWith('ja') ? 'ja' : 'en'));
+  applyTheme(settings.theme || 'system');
+  const webhookEnable = $('#webhookEnable');
+  if (webhookEnable) {
+    webhookEnable.checked = settings.webhookEnabled ?? false;
+  }
+  const webhookUrl = $('#webhookUrl');
+  if (webhookUrl) {
+    webhookUrl.value = settings.webhookUrl ?? '';
+  }
+  const webhookTemplate = $('#webhookTemplate');
+  if (webhookTemplate) {
+    webhookTemplate.value = settings.webhookTemplate ?? '';
+  }
+  const webhookMentions = $('#webhookMentions');
+  if (webhookMentions) {
+    webhookMentions.value = settings.webhookMentions ?? '';
+  }
+  const autoCopy = $('#autoCopy');
+  if (autoCopy) {
+    autoCopy.checked = settings.autoCopy ?? false;
+  }
+  toggleWebhookUrlState(); // Webhook設定のUI状態を更新
 }
 
 function saveHistory() {
