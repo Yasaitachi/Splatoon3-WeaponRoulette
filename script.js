@@ -741,21 +741,19 @@ async function sendToDiscord(results, isTest = false) {
   try {
     const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Discord Webhookへの送信に失敗しました:', response.status, errorText);
-      if (!isTest) alert(t('webhook-send-error'));
+      if (!isTest) showToast(t('webhook-send-error'));
       return false;
     }
   } catch (error) {
     console.error('Discord Webhookへの送信中にエラーが発生しました:', error);
-    if (!isTest) alert(t('webhook-send-error'));
+    if (!isTest) showToast(t('webhook-send-error'));
     return false;
   }
   return true;
@@ -1026,9 +1024,9 @@ async function testDiscordWebhook() {
 
   try {
     const success = await sendToDiscord([], true);
-    alert(success ? t('settings-webhook-test-success') : t('settings-webhook-test-fail'));
+    showToast(success ? t('settings-webhook-test-success') : t('settings-webhook-test-fail'));
   } catch (error) {
-    alert(t('settings-webhook-test-fail'));
+    showToast(t('settings-webhook-test-fail'));
   } finally {
     testBtn.disabled = false;
     testBtn.textContent = t('settings-webhook-test-send');
@@ -1718,24 +1716,28 @@ async function showRoomList() {
     snapshots.forEach(snapshot => {
       const rooms = snapshot.val() || {};
       for (const [roomId, roomData] of Object.entries(rooms)) {
-        if (!allRooms.has(roomId)) {
+        // パスワード付きは表示しない & 有効期限切れを除外
+        if (roomData.public && roomData.lastActivity && (Date.now() - roomData.lastActivity < ROOM_EXPIRATION_MS) && !allRooms.has(roomId)) {
           allRooms.set(roomId, roomData);
         }
       }
     });
 
     if (allRooms.size === 0) {
+      roomListEmpty.textContent = t('room-list-empty');
       roomListEmpty.style.display = 'block';
     } else {
+      roomListEmpty.style.display = 'none';
       const sortedRooms = [...allRooms.entries()].sort(([, a], [, b]) => (b.createdAt || 0) - (a.createdAt || 0));
       roomListTableBody.innerHTML = sortedRooms.map(([roomId, room]) => {
         const playerCount = room.clients ? Object.keys(room.clients).length : 0;
         const createdTime = new Date(room.createdAt).toLocaleString(state.lang);
-        const joinButton = `<button class="btn secondary" onclick="joinRoomById('${roomId}')" data-i18n-key="room-list-join-btn"></button>`;
+        const lockIcon = room.hasPassword ? `<span class="lock-icon" title="${t('realtime-password-room-title')}">🔒</span>` : '';
+        const joinButton = `<button class="btn secondary join-from-list-btn" data-room-id="${roomId}" data-i18n-key="room-list-join-btn"></button>`;
         
         return `
           <tr>
-            <td><code>${roomId}</code></td>
+            <td><code>${roomId}</code>${lockIcon}</td>
             <td>${playerCount} / 8</td>
             <td>${createdTime}</td>
             <td class="room-list-join-btn-col">${joinButton}</td>
@@ -1744,7 +1746,7 @@ async function showRoomList() {
       }).join('');
     }
 
-    // 動的に生成されたボタンにイベントリスナーを追加
+    // onclick属性の代わりに、ここでイベントリスナーをまとめて設定
     $$('.join-from-list-btn').forEach(btn => {
       btn.addEventListener('click', (e) => joinRoomById(e.target.dataset.roomId));
     });
@@ -1756,18 +1758,6 @@ async function showRoomList() {
     showLoader(false);
     updateUIText(); // To translate dynamically added buttons
   }
-}
-
-async function joinRoomById(roomId) {
-    if (!roomId) return;
-    const name = playerNameInput.value.trim();
-    if (!name) {
-        alert(t('player-name-required'));
-        return;
-    }
-    roomIdInput.value = roomId;
-    closeRoomListModal();
-    await joinRoom();
 }
 
 function closeRoomListModal() {
@@ -2026,15 +2016,3 @@ function init() {
 }
 
 init();
-
-function updateFiltersOnFirebase() {
-  if (!state.isHost || state.roomRefs.length === 0) return;
-
-  const filters = {
-    class: $$('input[data-class]').reduce((acc, cb) => ({ ...acc, [cb.dataset.class]: cb.checked }), {}),
-    sub: $$('input[data-sub]').reduce((acc, cb) => ({ ...acc, [cb.dataset.sub]: cb.checked }), {}),
-    sp: $$('input[data-sp]').reduce((acc, cb) => ({ ...acc, [cb.dataset.sp]: cb.checked }), {}),
-    noRepeat: noRepeat.checked,
-  };
-  writeToAllRooms('filters', filters);
-}
