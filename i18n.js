@@ -1,10 +1,24 @@
 const translations = {
   ja: {
     // Realtime
-    'realtime-title': 'リアルタイム連携',
+    'realtime-title': 'オンライン連携',
     'realtime-player-name-placeholder': 'オンラインプレイで表示される名前',
-    'realtime-join-placeholder': '12桁のルームID', // 修正済み
+    'realtime-join-placeholder': 'ルームID',
     'realtime-join-btn': '参加',
+    'realtime-password-room': 'パスワード付き',
+    'realtime-password-room-title': 'チェックを入れるとパスワード付きの部屋が作成されます',
+    'realtime-password-placeholder': 'パスワード',
+    'realtime-password-prompt': 'この部屋はパスワードで保護されています。\nパスワードを入力してください:',
+    'realtime-password-incorrect': 'パスワードが違います。',
+    'realtime-password-required': 'パスワード付きの部屋を作成するには、パスワードを入力してください。',
+    'realtime-enter-room-id-alert': '参加するルームのIDを入力してください。',
+    'realtime-error-expired': 'このルームは有効期限が切れています。',
+    'realtime-error-full': 'このルームは満員です。',
+    'realtime-error-name-taken': 'その名前は既に使用されています。',
+    'realtime-error-name-blocked': 'あなたはこのルームへの参加がブロックされています。',
+    'realtime-error-banned': 'あなたはこのルームから追放されています。',
+    'room-list-join-btn': '参加',
+    'error-fetch-room-list': 'ルーム一覧の取得に失敗しました。',
     'realtime-joining-btn': '参加中...',
     'realtime-leave-btn': '退出する',
     'realtime-create-btn': 'ルーム作成',
@@ -62,6 +76,16 @@ const translations = {
     'history-empty': 'まだ履歴がありません',
     'history-delete-item': 'この項目を削除',
 
+    // Admin Menu
+    'realtime-kick-player': 'キック',
+    'realtime-block-player': 'ブロック',
+    'realtime-ban-player': '追放(BAN)',
+    'realtime-transfer-host': 'ホスト権限を譲渡',
+    'realtime-kick-confirm': '{name}さんをルームからキックしますか？',
+    'realtime-block-confirm': '{name}さんをブロックしますか？\nブロックすると、このルームに再参加できなくなります。',
+    'realtime-ban-confirm': '{name}さんを追放(BAN)しますか？\n追放すると、このルームに再参加できなくなり、IPアドレスも記録されます。',
+    'realtime-transfer-host-confirm': '{name}さんにホスト権限を譲渡しますか？\nこの操作は取り消せません。',
+
     // Player List & Chat
     'player-list-title': '参加者',
     'player-list-count': '{count}人',
@@ -69,6 +93,7 @@ const translations = {
     'chat-title': 'チャット',
     'chat-placeholder': 'メッセージを入力',
     'chat-send-btn': '送信',
+    'system-host-transferred': '[サーバー] ホスト権限が{oldHost}さんから{newHost}さんに譲渡されました。',
 
     // System Messages
     'system-new-host': '[サーバー] {name}さんが新しいホストになりました。',
@@ -76,6 +101,9 @@ const translations = {
     'system-player-left': '[サーバー] {name}さんが退出しました。',
 
     // Probability Table
+    'system-player-kicked': '[サーバー] {host}さんが{name}さんをキックしました。',
+    'system-player-blocked': '[サーバー] {host}さんが{name}さんをブロックしました。',
+    'system-player-banned': '[サーバー] {host}さんが{name}さんを追放しました。',
     'prob-title': '各ブキの排出確率',
     'prob-no-candidates': '対象ブキなし',
     'prob-weapon-name': 'ブキ名',
@@ -134,10 +162,24 @@ const translations = {
   },
   en: {
     // Realtime
-    'realtime-title': 'Real-time Sync',
+    'realtime-title': 'Online Sync',
     'realtime-player-name-placeholder': 'Name used for online play',
-    'realtime-join-placeholder': '12-digit Room ID', // Corrected
+    'realtime-join-placeholder': 'Room ID',
     'realtime-join-btn': 'Join',
+    'realtime-password-room': 'With Password',
+    'realtime-password-room-title': 'Check to create a password-protected room',
+    'realtime-password-placeholder': 'Password',
+    'realtime-password-prompt': 'This room is password protected.\nPlease enter the password:',
+    'realtime-password-incorrect': 'Incorrect password.',
+    'realtime-password-required': 'Please enter a password to create a password-protected room.',
+    'realtime-enter-room-id-alert': 'Please enter a Room ID to join.',
+    'realtime-error-expired': 'This room has expired.',
+    'realtime-error-full': 'This room is full.',
+    'realtime-error-name-taken': 'That name is already taken.',
+    'realtime-error-name-blocked': 'You are blocked from joining this room.',
+    'realtime-error-banned': 'You are banned from this room.',
+    'room-list-join-btn': 'Join',
+    'error-fetch-room-list': 'Failed to fetch room list.',
     'realtime-joining-btn': 'Joining...',
     'realtime-leave-btn': 'Leave Room',
     'realtime-create-btn': 'Create Room',
@@ -195,6 +237,16 @@ const translations = {
     'history-empty': 'No history yet',
     'history-delete-item': 'Delete this item',
 
+    // Admin Menu
+    'realtime-kick-player': 'Kick',
+    'realtime-block-player': 'Block',
+    'realtime-ban-player': 'Ban',
+    'realtime-transfer-host': 'Transfer Host',
+    'realtime-kick-confirm': 'Are you sure you want to kick {name} from the room?',
+    'realtime-block-confirm': 'Are you sure you want to block {name}?\nThey will not be able to rejoin this room.',
+    'realtime-ban-confirm': 'Are you sure you want to ban {name}?\nThey will not be able to rejoin, and their IP address will be recorded.',
+    'realtime-transfer-host-confirm': 'Are you sure you want to transfer host privileges to {name}?\nThis action cannot be undone.',
+
     // Player List & Chat
     'player-list-title': 'Participants',
     'player-list-count': '{count} players',
@@ -202,6 +254,7 @@ const translations = {
     'chat-title': 'Chat',
     'chat-placeholder': 'Type a message',
     'chat-send-btn': 'Send',
+    'system-host-transferred': '[Server] Host privileges were transferred from {oldHost} to {newHost}.',
 
     // System Messages
     'system-new-host': '[Server] {name} is the new host.',
@@ -209,6 +262,9 @@ const translations = {
     'system-player-left': '[Server] {name} has left.',
 
     // Probability Table
+    'system-player-kicked': '[Server] {name} was kicked by {host}.',
+    'system-player-blocked': '[Server] {name} was blocked by {host}.',
+    'system-player-banned': '[Server] {name} was banned by {host}.',
     'prob-title': 'Probability of each weapon',
     'prob-no-candidates': 'No candidates',
     'prob-weapon-name': 'Weapon',

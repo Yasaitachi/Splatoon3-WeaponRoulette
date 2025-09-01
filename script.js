@@ -540,7 +540,6 @@ async function displaySpinResult(finalResults, pool) {
 async function performDraw() {
   if (state.running || !state.isHost || state.roomRefs.length === 0) return;
 
-  updatePool();
   const finalResults = getDrawResults();
   if (!finalResults) return;
 
@@ -567,7 +566,6 @@ async function startSpin() {
     }
   } else {
     // ローカルモード
-    updatePool();
     const finalResults = getDrawResults();
     if (finalResults) {
       await displaySpinResult(finalResults, state.pool);
@@ -1733,7 +1731,7 @@ async function showRoomList() {
         const playerCount = room.clients ? Object.keys(room.clients).length : 0;
         const createdTime = new Date(room.createdAt).toLocaleString(state.lang);
         const lockIcon = room.hasPassword ? `<span class="lock-icon" title="${t('realtime-password-room-title')}">🔒</span>` : '';
-        const joinButton = `<button class="btn secondary join-from-list-btn" data-room-id="${roomId}" data-i18n-key="room-list-join-btn"></button>`;
+        const joinButton = `<button class="btn secondary join-from-list-btn" data-room-id="${roomId}">${t('room-list-join-btn')}</button>`;
         
         return `
           <tr>
@@ -1748,7 +1746,7 @@ async function showRoomList() {
 
     // onclick属性の代わりに、ここでイベントリスナーをまとめて設定
     $$('.join-from-list-btn').forEach(btn => {
-      btn.addEventListener('click', (e) => joinRoomById(e.target.dataset.roomId));
+      btn.addEventListener('click', (e) => joinRoomById(e.currentTarget.dataset.roomId));
     });
   } catch (error) {
     console.error("Error fetching room list:", error);
@@ -1758,6 +1756,18 @@ async function showRoomList() {
     showLoader(false);
     updateUIText(); // To translate dynamically added buttons
   }
+}
+
+async function joinRoomById(roomId) {
+    if (!roomId) return;
+    const name = playerNameInput.value.trim();
+    if (!name) {
+        alert(t('player-name-required'));
+        return;
+    }
+    roomIdInput.value = roomId;
+    closeRoomListModal();
+    await joinRoom();
 }
 
 function closeRoomListModal() {
