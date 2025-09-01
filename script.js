@@ -75,7 +75,8 @@ const state = {
   lastPick: null,
   interval: 50,
   // Firebase state
-  db: null,
+  dbs: {}, // { server1: db1, server2: db2, ... }
+  db: null, // The currently active DB instance
   roomRef: null,
   playerRef: null,
   roomId: null,
@@ -119,6 +120,11 @@ const chatContainer = $('#chat-container');
 const chatMessagesEl = $('#chat-messages');
 const chatInput = $('#chatInput');
 const chatSendBtn = $('#chatSendBtn');
+const findRoomBtn = $('#findRoomBtn');
+const roomListModal = $('#roomListModal');
+const closeRoomListBtn = $('#closeRoomListBtn');
+const roomListTableBody = $('#roomListTableBody');
+const roomListEmpty = $('#room-list-empty');
 const loaderOverlay = $('#loader-overlay');
 
 // --- アプリケーションロジック ----------------------------------------------
@@ -1244,6 +1250,30 @@ async function createRoom() { // UIの状態を更新して、処理中である
   }
   state.playerName = name;
 
+  // Find the least loaded server to create the room on
+  const dbInstances = state.dbs;
+  const roomCounts = await Promise.all(
+      Object.values(dbInstances).map(db => 
+          db.ref('rooms').once('value').then(snap => snap.numChildren()).catch(() => Infinity)
+      )
+  );
+
+  let minRooms = Infinity;
+  let bestDb = null;
+  Object.values(dbInstances).forEach((db, index) => {
+      if (roomCounts[index] < minRooms) {
+          minRooms = roomCounts[index];
+          bestDb = db;
+      }
+  });
+
+  if (!bestDb) {
+      alert(t('error-no-servers')); // You might want to add this to i18n.js
+      reEnableButtons();
+      return;
+  }
+  state.db = bestDb;
+
   const ip = await getIPAddress();
   try {
     const roomsRef = state.db.ref('rooms');
@@ -1303,24 +1333,39 @@ async function joinRoom() {
   }
   const roomId = roomIdInput.value.trim();
   if (!roomId) {
+    alert(t('realtime-enter-room-id-alert'));
     reEnableButtons();
     return;
   }
 
   state.playerName = name;
+
+  // Find which server the room is on
+  let targetDb = null;
+  let roomSnapshot = null;
+  for (const db of Object.values(state.dbs)) {
+    const ref = db.ref(`rooms/${roomId}`);
+    const snapshot = await ref.once('value');
+    if (snapshot.exists()) {
+      targetDb = db;
+      roomSnapshot = snapshot;
+      break;
+    }
+  }
+
+  if (!targetDb) {
+    alert(t('realtime-room-not-found'));
+    reEnableButtons();
+    return;
+  }
+
+  state.db = targetDb;
   state.roomId = roomId;
-  state.roomRef = state.db.ref(`rooms/${state.roomId}`);
+  state.roomRef = state.db.ref(`rooms/${roomId}`);
   const ip = await getIPAddress();
 
   try {
-    const snapshot = await state.roomRef.once('value');
-    if (!snapshot.exists()) {
-      alert(t('realtime-error-connect'));
-      reEnableButtons();
-      return;
-    }
-
-    const roomData = snapshot.val();
+    const roomData = roomSnapshot.val();
     // Check for room expiration
     if (roomData.lastActivity && (Date.now() - roomData.lastActivity > ROOM_EXPIRATION_MS)) {
         alert(t('realtime-error-expired'));
@@ -1331,7 +1376,7 @@ async function joinRoom() {
     }
 
     // Check if banned by IP
-    const bannedIPsSnapshot = await roomRefForCheck.child('bannedIPs').once('value');
+    const bannedIPsSnapshot = await roomSnapshot.ref.child('bannedIPs').once('value');
     const bannedIPs = Object.values(bannedIPsSnapshot.val() || {});
     if (ip && bannedIPs.includes(ip)) {
         alert(t('realtime-error-banned-ip'));
@@ -1340,7 +1385,7 @@ async function joinRoom() {
     }
 
     // Check if blocked by name
-    const blockedNamesSnapshot = await roomRefForCheck.child('blockedNames').once('value');
+    const blockedNamesSnapshot = await roomSnapshot.ref.child('blockedNames').once('value');
     const blockedNames = Object.values(blockedNamesSnapshot.val() || {});
     if (blockedNames.includes(name)) {
         alert(t('realtime-error-blocked'));
@@ -1610,6 +1655,60 @@ function sendChatMessage() {
   }
 }
 
+async function showRoomList() {
+  roomListModal.style.display = 'flex';
+  roomListTableBody.innerHTML = ''; // Clear previous list
+  roomListEmpty.style.display = 'none';
+  showLoader(true);
+
+  try {
+    const roomPromises = Object.values(state.dbs).map(db => 
+      db.ref('rooms').orderByChild('lastActivity').startAt(Date.now() - ROOM_EXPIRATION_MS).once('value')
+    );
+    const snapshots = await Promise.all(roomPromises);
+
+    const allRooms = new Map();
+    snapshots.forEach(snapshot => {
+      const rooms = snapshot.val() || {};
+      for (const [roomId, roomData] of Object.entries(rooms)) {
+        if (!allRooms.has(roomId)) {
+          allRooms.set(roomId, roomData);
+        }
+      }
+    });
+
+    if (allRooms.size === 0) {
+      roomListEmpty.style.display = 'block';
+    } else {
+      const sortedRooms = [...allRooms.entries()].sort(([, a], [, b]) => (b.createdAt || 0) - (a.createdAt || 0));
+      roomListTableBody.innerHTML = sortedRooms.map(([roomId, room]) => {
+        const playerCount = room.clients ? Object.keys(room.clients).length : 0;
+        const createdTime = new Date(room.createdAt).toLocaleString(state.lang);
+        const joinButton = `<button class="btn secondary" onclick="joinRoomById('${roomId}')" data-i18n-key="room-list-join-btn"></button>`;
+        
+        return `
+          <tr>
+            <td><code>${roomId}</code></td>
+            <td>${playerCount} / 8</td>
+            <td>${createdTime}</td>
+            <td class="room-list-join-btn-col">${joinButton}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+  } catch (error) {
+    console.error("Error fetching room list:", error);
+    roomListEmpty.textContent = t('error-fetch-room-list');
+    roomListEmpty.style.display = 'block';
+  } finally {
+    showLoader(false);
+    updateUIText(); // To translate dynamically added buttons
+  }
+}
+
+function closeRoomListModal() {
+  if (roomListModal) roomListModal.style.display = 'none';
+}
 
 // --- 初期化とイベントリスナー設定 ------------------------------------
 
@@ -1673,6 +1772,13 @@ function setupEventListeners() {
     if (e.key === 'Enter') {
       sendChatMessage();
     }
+  });
+
+  // Room List Modal Listeners
+  findRoomBtn.addEventListener('click', showRoomList);
+  closeRoomListBtn.addEventListener('click', closeRoomListModal);
+  roomListModal.addEventListener('click', (e) => {
+    if (e.target === roomListModal) closeRoomListModal();
   });
 
   // Admin menu and actions handler
