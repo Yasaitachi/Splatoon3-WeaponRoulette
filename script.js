@@ -1,66 +1,16 @@
 // --- Firebase Configuration -----------------------------------------------
-const serverList = {
-  'server1': {
-    name: 'サーバー1',
-    name_en: 'Server 1',
-    config: {
-      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-      apiKey: "AIzaSyDU1_EpLI3SXLYIiDdC52OJf8f6EcaVDgs",
-      authDomain: "splatoon3-weapon-roulette1.firebaseapp.com",
-      databaseURL: "https://splatoon3-weapon-roulette1-default-rtdb.firebaseio.com",
-      projectId: "splatoon3-weapon-roulette1",
-      storageBucket: "splatoon3-weapon-roulette1.firebasestorage.app",
-      messagingSenderId: "403751873324",
-      appId: "1:403751873324:web:c1517d7238801b1c431a89",
-      measurementId: "G-RSNY1FGMW8"
-    }
-  },
-  'server2': {
-    name: 'サーバー2',
-    name_en: 'Server 2',
-    config: {
-      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-      apiKey: "AIzaSyAniQoP6FnHMG3dL2_UBmyD8QzO3O78CFs",
-      authDomain: "splatoon3-weaponroulette-d1d5e.firebaseapp.com",
-      databaseURL: "https://splatoon3-weaponroulette-d1d5e-default-rtdb.firebaseio.com",
-      projectId: "splatoon3-weaponroulette-d1d5e",
-      storageBucket: "splatoon3-weaponroulette-d1d5e.firebasestorage.app",
-      messagingSenderId: "8343949754",
-      appId: "1:8343949754:web:1174fe2a9e00f6ddad0d83",
-      measurementId: "G-5XLXY18BGR"
-    }
-  },
-  'server3': {
-    name: 'サーバー3',
-    name_en: 'Server 3',
-    config: {
-      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-      apiKey: "AIzaSyAHsLIv_ab0RZRcT5Ac5mFDPTuACHcmOjY",
-      authDomain: "splatoon3-weapon-roulette3.firebaseapp.com",
-      databaseURL: "https://splatoon3-weapon-roulette3-default-rtdb.firebaseio.com",
-      projectId: "splatoon3-weapon-roulette3",
-      storageBucket: "splatoon3-weapon-roulette3.firebasestorage.app",
-      messagingSenderId: "728808657397",
-      appId: "1:728808657397:web:6b658f1901e878a73090bc",
-      measurementId: "G-5E7T75GQ2T"
-    }
-  },
-  'server4': {
-    name: 'サーバー4',
-    name_en: 'Server 4',
-    config: {
-      // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-      apiKey: "AIzaSyC8IMWMzHFzkHJRobu42Tt7_IBsiNcPFa8",
-      authDomain: "splatoon3-weapon-roulette4.firebaseapp.com",
-      databaseURL: "https://splatoon3-weapon-roulette4-default-rtdb.firebaseio.com",
-      projectId: "splatoon3-weapon-roulette4",
-      storageBucket: "splatoon3-weapon-roulette4.firebasestorage.app",
-      messagingSenderId: "114867132156",
-      appId: "1:114867132156:web:bb820f76f0eb068409e979",
-      measurementId: "G-694Q4H5PR4"
-    }
-  }
+
+// ▼▼▼ PASTE FIREBASE CONFIG HERE ▼▼▼
+const firebaseConfig = {
+  apiKey: "AIzaSyCasaRCxU26RD8Dvnzs4pT1uKgbX0MJgr8",
+  authDomain: "splatoon3-weponroulette.firebaseapp.com",
+  databaseURL: "https://splatoon3-weponroulette-default-rtdb.firebaseio.com",
+  projectId: "splatoon3-weponroulette",
+  storageBucket: "splatoon3-weponroulette.firebasestorage.app",
+  messagingSenderId: "198539626159",
+  appId: "1:198539626159:web:6790cb5270add8bc00f65a"
 };
+// ▲▲▲ PASTE FIREBASE CONFIG HERE ▲▲▲
 
 
 // --- グローバル変数 ---------------------------------------------------------
@@ -75,8 +25,7 @@ const state = {
   lastPick: null,
   interval: 50,
   // Firebase state
-  dbs: {}, // { server1: db1, server2: db2, ... }
-  db: null, // The currently active DB instance
+  db: null,
   roomRef: null,
   playerRef: null,
   roomId: null,
@@ -120,11 +69,6 @@ const chatContainer = $('#chat-container');
 const chatMessagesEl = $('#chat-messages');
 const chatInput = $('#chatInput');
 const chatSendBtn = $('#chatSendBtn');
-const findRoomBtn = $('#findRoomBtn');
-const roomListModal = $('#roomListModal');
-const closeRoomListBtn = $('#closeRoomListBtn');
-const roomListTableBody = $('#roomListTableBody');
-const roomListEmpty = $('#room-list-empty');
 const loaderOverlay = $('#loader-overlay');
 
 // --- アプリケーションロジック ----------------------------------------------
@@ -1111,28 +1055,16 @@ function applyFiltersFromFirebase(filters) {
 
 function initFirebase() {
   try {
-    Object.entries(serverList).forEach(([id, server]) => {
-      if (server.config && server.config.apiKey && !server.config.apiKey.startsWith("YOUR_")) {
-        try {
-          // 既に同じ名前で初期化されていないかチェック
-          if (!firebase.apps.some(app => app.name === id)) {
-            const app = firebase.initializeApp(server.config, id);
-            state.dbs[id] = firebase.database(app);
-          }
-        } catch (e) {
-          console.error(`Failed to initialize Firebase for server ${id}:`, e);
-        }
-      }
-    });
-
-    if (Object.keys(state.dbs).length === 0) {
-      console.warn("No valid Firebase configuration found. Real-time features will be disabled.");
-      setRealtimeUiState('error');
-      $('#createRoomBtn').disabled = true;
-      $('#joinRoomBtn').disabled = true;
-      return;
+    if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
+    console.warn("Firebase is not configured. Real-time features will be disabled.");
+    setRealtimeUiState('error');
+    return;
+  }
+    // Prevent re-initialization
+    if (!firebase.apps.length) {
+      firebase.initializeApp(firebaseConfig);
     }
-
+    state.db = firebase.database();
     setRealtimeUiState('disconnected');
 
     // URLからルームIDを読み取って自動参加
@@ -1186,48 +1118,49 @@ function closeAdminMenu() {
 }
 
 function kickPlayer(playerId, playerName) {
-    if (!state.isHost || state.roomRefs.length === 0) return;
+    if (!state.isHost || !state.roomRef) return;    
     // プレイヤーにキックされたことを通知
-    writeToAllRooms(`notifications/${playerId}`, {
+    state.roomRef.child('notifications').child(playerId).set({
         type: 'kick',
         hostName: state.playerName,
         timestamp: firebase.database.ServerValue.TIMESTAMP
     });
     const message = t('system-player-kicked', { name: playerName, host: state.playerName });
-    pushAndSetToAllRooms('chat', { name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
-    removeFromAllRooms(`clients/${playerId}`);
+    state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    state.roomRef.child('clients').child(playerId).remove();
 }
 
 function blockPlayer(playerId, playerName) {
-    if (!state.isHost || state.roomRefs.length === 0) return;
-    pushAndSetToAllRooms('blockedNames', playerName);
+    if (!state.isHost || !state.roomRef) return;    
+    state.roomRef.child('blockedNames').push(playerName);
     const message = t('system-player-blocked', { name: playerName, host: state.playerName });
-    pushAndSetToAllRooms('chat', { name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
-    removeFromAllRooms(`clients/${playerId}`);
+    state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    state.roomRef.child('clients').child(playerId).remove();
 }
 
 function banPlayer(playerId, playerName) {
-    if (!state.isHost || state.roomRefs.length === 0) return;
+    if (!state.isHost || !state.roomRef) return;    
     const playerToBan = state.players.find(p => p.id === playerId);
     if (!playerToBan || !playerToBan.ip) return;
 
     // プレイヤーにBANされたことを通知
-    writeToAllRooms(`notifications/${playerId}`, {
+    state.roomRef.child('notifications').child(playerId).set({
         type: 'ban',
         hostName: state.playerName,
         timestamp: firebase.database.ServerValue.TIMESTAMP
     });
 
-    pushAndSetToAllRooms('bannedIPs', playerToBan.ip);
-    pushAndSetToAllRooms('blockedNames', playerName); // BANは名前ブロックも兼ねる
+    state.roomRef.child('bannedIPs').push(playerToBan.ip);
+    state.roomRef.child('blockedNames').push(playerName); // BANは名前ブロックも兼ねる
     const message = t('system-player-banned', { name: playerName, host: state.playerName });
-    pushAndSetToAllRooms('chat', { name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
-    removeFromAllRooms(`clients/${playerId}`);
+    state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    state.roomRef.child('clients').child(playerId).remove();
 }
 
 async function createRoom() { // UIの状態を更新して、処理中であることをユーザーにフィードバック
-  if (Object.keys(state.dbs).length === 0) {
+  if (!state.db) {
     alert("データベースに接続できません。ページをリロードして再度お試しください。");
+    console.error("Firebase Database is not initialized. state.db is null.");
     return;
   }
 
@@ -1250,30 +1183,6 @@ async function createRoom() { // UIの状態を更新して、処理中である
   }
   state.playerName = name;
 
-  // Find the least loaded server to create the room on
-  const dbInstances = state.dbs;
-  const roomCounts = await Promise.all(
-      Object.values(dbInstances).map(db => 
-          db.ref('rooms').once('value').then(snap => snap.numChildren()).catch(() => Infinity)
-      )
-  );
-
-  let minRooms = Infinity;
-  let bestDb = null;
-  Object.values(dbInstances).forEach((db, index) => {
-      if (roomCounts[index] < minRooms) {
-          minRooms = roomCounts[index];
-          bestDb = db;
-      }
-  });
-
-  if (!bestDb) {
-      alert(t('error-no-servers')); // You might want to add this to i18n.js
-      reEnableButtons();
-      return;
-  }
-  state.db = bestDb;
-
   const ip = await getIPAddress();
   try {
     const roomsRef = state.db.ref('rooms');
@@ -1288,19 +1197,20 @@ async function createRoom() { // UIの状態を更新して、処理中である
     }
 
     state.roomId = newRoomId;
-    state.roomRefs = Object.values(state.dbs).map(db => db.ref(`rooms/${state.roomId}`));
-    await writeToAllRooms('', {
+    state.roomRef = roomsRef.child(state.roomId);
+    await state.roomRef.set({
       createdAt: firebase.database.ServerValue.TIMESTAMP,
       lastActivity: firebase.database.ServerValue.TIMESTAMP,
       lastSpin: null,
       host: state.playerName,
     });
 
-    state.playerRefs = await pushToAllRoomsAndGetRefs('clients', {
+    state.playerRef = state.roomRef.child('clients').push({
       name: state.playerName,
       joinedAt: firebase.database.ServerValue.TIMESTAMP,
       ip: ip
     });
+    state.playerRef.onDisconnect().remove();
 
     listenToRoomChanges();
     // ルーム作成時に現在のフィルター状態を書き込む
@@ -1333,39 +1243,24 @@ async function joinRoom() {
   }
   const roomId = roomIdInput.value.trim();
   if (!roomId) {
-    alert(t('realtime-enter-room-id-alert'));
     reEnableButtons();
     return;
   }
 
   state.playerName = name;
-
-  // Find which server the room is on
-  let targetDb = null;
-  let roomSnapshot = null;
-  for (const db of Object.values(state.dbs)) {
-    const ref = db.ref(`rooms/${roomId}`);
-    const snapshot = await ref.once('value');
-    if (snapshot.exists()) {
-      targetDb = db;
-      roomSnapshot = snapshot;
-      break;
-    }
-  }
-
-  if (!targetDb) {
-    alert(t('realtime-room-not-found'));
-    reEnableButtons();
-    return;
-  }
-
-  state.db = targetDb;
   state.roomId = roomId;
-  state.roomRef = state.db.ref(`rooms/${roomId}`);
+  state.roomRef = state.db.ref(`rooms/${state.roomId}`);
   const ip = await getIPAddress();
 
   try {
-    const roomData = roomSnapshot.val();
+    const snapshot = await state.roomRef.once('value');
+    if (!snapshot.exists()) {
+      alert(t('realtime-error-connect'));
+      reEnableButtons();
+      return;
+    }
+
+    const roomData = snapshot.val();
     // Check for room expiration
     if (roomData.lastActivity && (Date.now() - roomData.lastActivity > ROOM_EXPIRATION_MS)) {
         alert(t('realtime-error-expired'));
@@ -1376,7 +1271,7 @@ async function joinRoom() {
     }
 
     // Check if banned by IP
-    const bannedIPsSnapshot = await roomSnapshot.ref.child('bannedIPs').once('value');
+    const bannedIPsSnapshot = await state.roomRef.child('bannedIPs').once('value');
     const bannedIPs = Object.values(bannedIPsSnapshot.val() || {});
     if (ip && bannedIPs.includes(ip)) {
         alert(t('realtime-error-banned-ip'));
@@ -1385,19 +1280,20 @@ async function joinRoom() {
     }
 
     // Check if blocked by name
-    const blockedNamesSnapshot = await roomSnapshot.ref.child('blockedNames').once('value');
+    const blockedNamesSnapshot = await state.roomRef.child('blockedNames').once('value');
     const blockedNames = Object.values(blockedNamesSnapshot.val() || {});
     if (blockedNames.includes(name)) {
         alert(t('realtime-error-blocked'));
         reEnableButtons();
         return;
     }
-    state.roomRefs = Object.values(state.dbs).map(db => db.ref(`rooms/${state.roomId}`));
-    state.playerRefs = await pushToAllRoomsAndGetRefs('clients', {
+
+    state.playerRef = state.roomRef.child('clients').push({
       name: state.playerName,
       joinedAt: firebase.database.ServerValue.TIMESTAMP,
       ip: ip
     });
+    state.playerRef.onDisconnect().remove();
 
     listenToRoomChanges();
   } catch (error) {
@@ -1436,10 +1332,8 @@ function listenToRoomChanges() {
   // Start sending heartbeats to keep the room alive
   startActivityHeartbeat();
 
-  const myPlayerId = state.playerRef.key;
-
   // 自分への通知（キック、BANなど）をリッスン
-  const notificationRef = state.roomRef.child('notifications').child(myPlayerId);
+  const notificationRef = state.roomRef.child('notifications').child(state.playerRef.key);
   notificationRef.on('value', (snapshot) => {
     if (!snapshot.exists()) {
       return;
@@ -1493,7 +1387,7 @@ function listenToRoomChanges() {
     state.players = playerArray;
     updatePlayerList(playerArray);
 
-    const me = playerArray.find(p => p.id === myPlayerId);
+    const me = playerArray.find(p => p.id === state.playerRef?.key);
     if (me) {
       const wasHost = state.isHost;
       state.isHost = me.isHost;
@@ -1655,64 +1549,12 @@ function sendChatMessage() {
   }
 }
 
-async function showRoomList() {
-  roomListModal.style.display = 'flex';
-  roomListTableBody.innerHTML = ''; // Clear previous list
-  roomListEmpty.style.display = 'none';
-  showLoader(true);
-
-  try {
-    const roomPromises = Object.values(state.dbs).map(db => 
-      db.ref('rooms').orderByChild('lastActivity').startAt(Date.now() - ROOM_EXPIRATION_MS).once('value')
-    );
-    const snapshots = await Promise.all(roomPromises);
-
-    const allRooms = new Map();
-    snapshots.forEach(snapshot => {
-      const rooms = snapshot.val() || {};
-      for (const [roomId, roomData] of Object.entries(rooms)) {
-        if (!allRooms.has(roomId)) {
-          allRooms.set(roomId, roomData);
-        }
-      }
-    });
-
-    if (allRooms.size === 0) {
-      roomListEmpty.style.display = 'block';
-    } else {
-      const sortedRooms = [...allRooms.entries()].sort(([, a], [, b]) => (b.createdAt || 0) - (a.createdAt || 0));
-      roomListTableBody.innerHTML = sortedRooms.map(([roomId, room]) => {
-        const playerCount = room.clients ? Object.keys(room.clients).length : 0;
-        const createdTime = new Date(room.createdAt).toLocaleString(state.lang);
-        const joinButton = `<button class="btn secondary" onclick="joinRoomById('${roomId}')" data-i18n-key="room-list-join-btn"></button>`;
-        
-        return `
-          <tr>
-            <td><code>${roomId}</code></td>
-            <td>${playerCount} / 8</td>
-            <td>${createdTime}</td>
-            <td class="room-list-join-btn-col">${joinButton}</td>
-          </tr>
-        `;
-      }).join('');
-    }
-  } catch (error) {
-    console.error("Error fetching room list:", error);
-    roomListEmpty.textContent = t('error-fetch-room-list');
-    roomListEmpty.style.display = 'block';
-  } finally {
-    showLoader(false);
-    updateUIText(); // To translate dynamically added buttons
-  }
-}
-
-function closeRoomListModal() {
-  if (roomListModal) roomListModal.style.display = 'none';
-}
 
 // --- 初期化とイベントリスナー設定 ------------------------------------
 
 function buildFilterUI() {
+  const allSubs = [...new Set(weapons.map(w => w.sub))].filter(Boolean).sort();
+  const allSps = [...new Set(weapons.map(w => w.sp))].filter(Boolean).sort();
   const classFilters = $('#classFilters');
   // Note: Text content will be set by updateUIText()
   classFilters.innerHTML = `
@@ -1730,7 +1572,7 @@ function buildFilterUI() {
       <strong data-i18n-key="filter-sub"></strong>
       <button type="button" class="btn-filter" data-toggle-all="sub" data-i18n-key="filter-toggle"></button>
     </div>
-    ${[...new Set(weapons.map(w => w.sub))].filter(Boolean).sort().map(sub =>
+    ${allSubs.map(sub =>
       `<label class="chip"><input type="checkbox" data-sub="${sub}" checked> <span data-i18n-key="${sub}">${sub}</span></label>`
     ).join('')}
   </div>
@@ -1739,7 +1581,7 @@ function buildFilterUI() {
       <strong data-i18n-key="filter-special"></strong>
       <button type="button" class="btn-filter" data-toggle-all="sp" data-i18n-key="filter-toggle"></button>
     </div>
-    ${[...new Set(weapons.map(w => w.sp))].filter(Boolean).sort().map(sp =>
+    ${allSps.map(sp =>
       `<label class="chip"><input type="checkbox" data-sp="${sp}" checked> <span data-i18n-key="${sp}">${sp}</span></label>`
     ).join('')}
   </div>
@@ -1772,13 +1614,6 @@ function setupEventListeners() {
     if (e.key === 'Enter') {
       sendChatMessage();
     }
-  });
-
-  // Room List Modal Listeners
-  findRoomBtn.addEventListener('click', showRoomList);
-  closeRoomListBtn.addEventListener('click', closeRoomListModal);
-  roomListModal.addEventListener('click', (e) => {
-    if (e.target === roomListModal) closeRoomListModal();
   });
 
   // Admin menu and actions handler
@@ -1860,7 +1695,7 @@ function setupEventListeners() {
       }
       updatePool();
       saveSettings();
-      if (state.isHost && state.roomRef) {
+      if (state.isHost) {
         updateFiltersOnFirebase();
       }
     };
@@ -1876,7 +1711,7 @@ function setupEventListeners() {
   noRepeat.addEventListener('change', () => {
     updatePool();
     saveSettings();
-    if (state.isHost && state.roomRef) {
+    if (state.isHost) {
       updateFiltersOnFirebase();
     }
   });
@@ -1893,7 +1728,7 @@ function setupEventListeners() {
       checkboxes.forEach(cb => cb.checked = newCheckedState);
       updatePool();
       saveSettings();
-      if (state.isHost && state.roomRef) {
+      if (state.isHost) {
         updateFiltersOnFirebase();
       }
     }
@@ -1954,15 +1789,3 @@ function init() {
 }
 
 init();
-
-function updateFiltersOnFirebase() {
-  if (!state.isHost || !state.roomRef) return;
-
-  const filters = {
-    class: $$('input[data-class]').reduce((acc, cb) => ({ ...acc, [cb.dataset.class]: cb.checked }), {}),
-    sub: $$('input[data-sub]').reduce((acc, cb) => ({ ...acc, [cb.dataset.sub]: cb.checked }), {}),
-    sp: $$('input[data-sp]').reduce((acc, cb) => ({ ...acc, [cb.dataset.sp]: cb.checked }), {}),
-    noRepeat: noRepeat.checked,
-  };
-  state.roomRef.child('filters').set(filters);
-}
