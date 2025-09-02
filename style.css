@@ -131,6 +131,7 @@ h1 { margin: 0; font-size: clamp(20px, 3vw, 28px); letter-spacing: .02em; }
   margin: 0;
   font-size: clamp(18px, 3vw, 24px);
   font-weight: 800;
+  display: none; /* 複数人抽選の結果リストを非表示にする */
 }
 .result-list li {
   align-items: center;
@@ -187,9 +188,19 @@ h1 { margin: 0; font-size: clamp(20px, 3vw, 28px); letter-spacing: .02em; }
   color: var(--text);
 }
 
+/* ブキ絞り込みのコンテナ（.gridクラスがindex.htmlで指定されている） */
 .grid {
-  display:grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 10px;
-  max-height: 360px; overflow: auto; padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 360px;
+  overflow: auto;
+  padding: 6px;
+}
+
+/* 各ブキ種別のチップを並べるグリッド（JSによって生成される） */
+.filter-group .grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 10px;
 }
 .chip {
   background: var(--chip-bg);
@@ -394,41 +405,172 @@ input:checked + .slider:before {
 }
 
 /* Chat */
+#chat-container {
+  display: none !important; /* デフォルトでは非表示 */
+  flex-direction: column;
+}
+
+/* ルームに参加した場合はチャットを表示する */
+body.in-room #chat-container {
+  display: flex !important;
+}
+
 .chat-messages {
-  max-height: 240px;
+  /* 1行のメッセージが約14件表示される高さに固定し、それ以降はスクロール */
+  height: 180px;
+  max-height: 180px;
   overflow-y: auto;
   margin-top: 8px;
   margin-bottom: 8px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 4px;
+  gap: 4px; /* メッセージ間のgapを少し詰める */
+  padding: 8px 12px; /* 左右の余白を確保 */
 }
+
+/* 個々のメッセージのコンテナ (デフォルトは他人 = 右寄せ) */
 .chat-message {
-  font-size: 14px;
-  line-height: 1.4;
   display: flex;
-  align-items: baseline;
-  gap: 6px;
+  align-items: flex-end; /* タイムスタンプを吹き出しの下端に合わせる */
+  gap: 8px;
+  max-width: 100%;
+  justify-content: flex-end; /* 他人のメッセージを右寄せ */
+  flex-direction: row-reverse; /* タイムスタンプとコンテンツの順序を入れ替える */
 }
-.chat-message.system {
+
+/* 自分のメッセージは左寄せ */
+.chat-message.own {
+  justify-content: flex-start; /* 左寄せに上書き */
+  flex-direction: row; /* 通常の順序に上書き */
+}
+
+/* 名前と吹き出しをまとめるコンテナ (デフォルトは他人 = 右寄せ) */
+.chat-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end; /* 他人のメッセージは右寄せ */
+  max-width: 75%;
+}
+
+/* 自分のメッセージは左寄せ */
+.chat-message.own .chat-content {
+  align-items: flex-start; /* 左寄せに上書き */
+}
+
+/* 送信者名 (他人用) */
+.chat-author {
+  font-size: 13px;
+  font-weight: 600;
   color: var(--muted);
-  font-style: italic;
-  text-align: center;
-  font-size: 12px;
-  display: block; /* flexを上書きして中央揃えを維持 */
+  margin-bottom: 4px;
+  margin-right: 12px; /* 吹き出しのしっぽ分、少しインデント */
 }
-.chat-message strong {
-  margin-right: 0;
-  color: var(--accent);
+
+/* 吹き出しのスタイル (デフォルトは他人用) */
+.chat-bubble {
+  position: relative;
+  background-color: var(--chip-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 18px;
+  padding: 10px 14px;
+  font-size: 15px;
+  line-height: 1.5;
+  word-break: break-word; /* 長い単語を折り返す */
+}
+
+/* 吹き出しのしっぽ（右側、他人用） */
+.chat-bubble::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: -8px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 6px 0 6px 10px;
+  border-color: transparent transparent transparent var(--card-border);
+}
+.chat-bubble::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: -7px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 6px 0 6px 10px;
+  border-color: transparent transparent transparent var(--chip-bg);
+}
+
+/* 自分のメッセージの吹き出しの色 (LINE風) */
+.chat-message.own .chat-bubble {
+  background-color: #8de055;
+  color: #000;
+  border-color: transparent;
+}
+html[data-theme="dark"] .chat-message.own .chat-bubble {
+  background-color: #3d8c40;
+  color: #fff;
+  border-color: transparent;
+}
+
+/* 自分のメッセージのしっぽ（左側） */
+.chat-message.own .chat-bubble::before {
+  display: none; /* 枠線用のしっぽは不要 */
+}
+.chat-message.own .chat-bubble::after {
+  left: -7px;
+  right: auto;
+  border-width: 6px 10px 6px 0;
+  border-color: transparent #8de055 transparent transparent;
+}
+html[data-theme="dark"] .chat-message.own .chat-bubble::after {
+  border-color: transparent #3d8c40 transparent transparent;
+}
+
+/* メンションされたメッセージのハイライト */
+.chat-message.mention .chat-bubble {
+  background-color: rgba(var(--accent-rgb), 0.15);
+  border-color: var(--accent);
+}
+
+/* メンション時の吹き出しのしっぽの色も変更 */
+.chat-message.mention .chat-bubble::before {
+  border-left-color: var(--accent);
+}
+.chat-message.mention .chat-bubble::after {
+  border-left-color: rgba(var(--accent-rgb), 0.15);
+}
+
+/* 自分のメッセージがメンションされた場合（緑の吹き出し）は、影をつけて強調 */
+.chat-message.own.mention .chat-bubble {
+  box-shadow: 0 0 8px 1px var(--accent);
+}
+
+
+/* タイムスタンプ */
+.chat-meta {
+  flex-shrink: 0;
+  margin-bottom: 2px;
 }
 .chat-timestamp {
   font-size: 12px;
   color: var(--muted);
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
 }
 
+/* システムメッセージ */
+.chat-message.system {
+  justify-content: center;
+  color: var(--muted);
+  font-style: italic;
+  font-size: 12px;
+  padding: 8px 0;
+  /* flex-endを上書き */
+  align-items: center;
+  flex-direction: row; /* システムメッセージは通常の向き */
+}
+
+/* 入力エリア */
 .chat-input-area {
   display: flex;
   gap: 8px;
@@ -439,7 +581,9 @@ input:checked + .slider:before {
 
 /* Player List */
 .player-list {
-  max-height: 200px;
+  /* 参加者が3人まで表示され、4人目以降はスクロールする高さに調整 */
+  height: 135px;
+  max-height: 135px;
   overflow-y: auto;
 }
 .player-item {
@@ -525,14 +669,74 @@ input:checked + .slider:before {
 }
 #room-join-ui { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 #realtime-controls .input-text { padding: 6px 10px; font-size: 14px; }
-#realtime-controls #playerNameInput { width: 180px; }
-#realtime-controls #roomIdInput { width: 160px; }
+#realtime-controls #playerNameInput { width: 150px; }
+#realtime-controls #roomIdInput { width: 120px; }
+#realtime-controls #roomPasswordInput { width: 90px; }
 #realtime-controls .btn { padding: 6px 12px; font-size: 14px; }
-#room-info-ui { display: flex; align-items: center; gap: 8px; }
-#roomIdDisplay { font-weight: bold; background: rgba(0,0,0,.2); padding: 2px 6px; border-radius: 4px; user-select: all; cursor: pointer; }
+#room-info-ui { display: flex; flex-direction: column; gap: 8px; } /* Changed to column for better layout of multiple lines */
+#roomIdDisplay, #roomPasswordDisplay { font-weight: bold; background: rgba(0,0,0,.2); padding: 2px 6px; border-radius: 4px; user-select: all; cursor: pointer; }
 #host-badge { padding: 2px 8px; font-size: 10px; }
+#room-timer {
+  font-weight: bold;
+  font-variant-numeric: tabular-nums; /* 数字を等幅にする */
+  font-size: 13px;
+  color: var(--accent);
+}
+
+#invite-link-container {
+  display: flex; /* Changed to flex to align input and button */
+  gap: 8px; /* Gap between input and button */
+  width: 100%;
+  /* margin-top: 8px; (Removed, handled by parent gap) */
+}
+
+#inviteLinkDisplay { /* Changed ID from inviteUrl to inviteLinkDisplay */
+  flex-grow: 1; /* Allow input to take available space */
+  cursor: pointer;
+  background-color: var(--chip-bg);
+  border: 1px solid var(--secondary-btn-border);
+  color: var(--muted);
+  padding: 6px 10px;
+  font-size: 12px;
+  border-radius: 8px;
+  font-family: 'Courier New', Courier, monospace;
+  text-overflow: ellipsis;
+  white-space: nowrap; /* Prevent URL from wrapping */
+  overflow: hidden; /* Hide overflow text */
+}
+
 .leave-room-container { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--card-border); }
 .leave-room-container .btn { width: 100%; }
+
+
+/* Server Status Indicator */
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background-color: var(--chip-bg);
+  border: 1px solid var(--card-border);
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  transition: background-color 0.3s ease;
+}
+.status-indicator.connecting .status-dot {
+  background-color: #ffc107; /* Amber */
+  animation: pulse 1.5s ease-in-out infinite;
+}
+.status-indicator.connected .status-dot {
+  background-color: #4caf50; /* Green */
+}
+.status-indicator.disconnected .status-dot, .status-indicator.error .status-dot {
+  background-color: var(--danger); /* Red */
+}
 
 /* --- Status Indicators --- */
 /* Loading Overlay */

@@ -19,6 +19,7 @@ const firebaseConfig = {
 const APP_VERSION = '1.2.0'; // アプリケーションのバージョン。更新時にこの数値を変更する。
 const RESET_TIMEOUT_MS = 10000; // 10秒
 const ROOM_EXPIRATION_MS = 30 * 60 * 1000; // 30分
+const ROOM_LIFETIME_MS = 3 * 60 * 60 * 1000; // 3時間
 const state = {
   running: false,
   resetTimer: null,
@@ -36,6 +37,8 @@ const state = {
   activityTimer: null,
   lang: 'ja',
   theme: 'system',
+  roomPassword: null,
+  roomExpiryTimer: null,
 };
 
 const ICONS = {
@@ -55,10 +58,17 @@ const fullscreenBtn = $('#fullscreenBtn');
 const settingsBtn = $('#settingsBtn');
 const settingsModal = $('#settingsModal');
 const closeSettingsBtn = $('#closeSettingsBtn');
+const inviteLinkContainer = $('#invite-link-container');
+const inviteLinkDisplay = $('#inviteLinkDisplay');
+const copyInviteLinkBtn = $('#copyInviteLinkBtn');
+const roomTimerContainer = $('#room-timer-container');
+const roomTimer = $('#room-timer');
 const createRoomBtn = $('#createRoomBtn');
 const joinRoomBtn = $('#joinRoomBtn');
 const leaveRoomBtn = $('#leaveRoomBtn');
 const roomIdInput = $('#roomIdInput');
+const roomPasswordInput = $('#roomPasswordInput');
+const roomPasswordDisplay = $('#roomPasswordDisplay');
 const roomJoinUi = $('#room-join-ui');
 const roomInfoUi = $('#room-info-ui');
 const roomIdDisplay = $('#roomIdDisplay');
@@ -915,6 +925,71 @@ async function testDiscordWebhook() {
   }
 }
 
+/**
+ * チャットメッセージをUIに追加する
+ * @param {object} data - メッセージデータ
+ * @param {string} [data.name] - 送信者名
+ * @param {string} data.message - メッセージ本文
+ * @param {boolean} [data.isSystem=false] - システムメッセージか否か
+ * @param {number} data.timestamp - タイムスタンプ
+ */
+function addChatMessage({ name, message, isSystem = false, timestamp }) {
+  // ユーザーがチャット履歴を遡っている最中に、新しいメッセージが来ても強制スクロールしないようにする
+  const shouldScroll = chatMessagesEl.scrollTop + chatMessagesEl.clientHeight >= chatMessagesEl.scrollHeight - 20;
+
+  const messageEl = document.createElement('div');
+  messageEl.className = 'chat-message';
+
+  if (isSystem) {
+    messageEl.classList.add('system');
+    messageEl.textContent = message; // System messages are simple text
+  } else {
+    // Regular messages (own or others)
+    if (name === state.playerName) {
+      messageEl.classList.add('own');
+    }
+
+    // Check for mentions and add highlight class
+    const myName = state.playerName;
+    if (myName && message.includes(`@${myName}`)) {
+      messageEl.classList.add('mention');
+    }
+
+    const contentEl = document.createElement('div');
+    contentEl.className = 'chat-content';
+
+    if (!isSystem) {
+      const nameEl = document.createElement('strong');
+      nameEl.className = 'chat-author';
+      nameEl.textContent = name;
+      contentEl.appendChild(nameEl);
+    }
+
+    const bubbleEl = document.createElement('div');
+    bubbleEl.className = 'chat-bubble';
+    bubbleEl.textContent = message;
+    contentEl.appendChild(bubbleEl);
+
+    const metaEl = document.createElement('div');
+    metaEl.className = 'chat-meta';
+    if (timestamp) {
+      const timeEl = document.createElement('span');
+      timeEl.className = 'chat-timestamp';
+      timeEl.textContent = new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      metaEl.appendChild(timeEl);
+    }
+
+    messageEl.appendChild(contentEl);
+    messageEl.appendChild(metaEl);
+  }
+
+  chatMessagesEl.appendChild(messageEl);
+
+  if (shouldScroll) {
+    chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+  }
+}
+
 function updatePlayerList(players) {
   playerCountDisplay.textContent = t('player-list-count', { count: players.length });
   if (!players || players.length === 0) {
@@ -937,31 +1012,12 @@ function updatePlayerList(players) {
 
       return `
       <div class="player-item">
-          <div class="player-name">
+          <div class="player-name" data-player-name="${player.name}" title="${t('chat-mention-tooltip', { name: player.name })}">
             <span>${player.name}${meIndicator}${hostIndicator}</span>
           </div>
           ${adminControls}
       </div>
   `}).join('');
-}
-
-function addChatMessage(name, message, isSystem = false) {
-  const messageEl = document.createElement('div');
-  messageEl.className = isSystem ? 'chat-message system' : 'chat-message';
-
-  const nameEl = document.createElement('strong');
-  nameEl.textContent = name;
-
-  const textEl = document.createElement('span');
-  textEl.textContent = message;
-
-  if (!isSystem) {
-    messageEl.append(nameEl, textEl);
-  } else {
-    messageEl.append(textEl);
-  }
-  chatMessagesEl.appendChild(messageEl);
-  chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
 }
 
 /**
@@ -1025,19 +1081,31 @@ function initFirebase() {
     state.db = firebase.database();
     setRealtimeUiState('disconnected');
 
-    // URLからルームIDを読み取って自動参加
+    // URLからルームIDとパスワードを読み取って自動入力
     const params = new URLSearchParams(window.location.search);
     const roomIdFromUrl = params.get('room');
+    const passwordFromUrl = params.get('password');
+
     if (roomIdFromUrl) {
       roomIdInput.value = roomIdFromUrl;
-      // 少し待ってから参加処理を開始
+    }
+    if (passwordFromUrl) {
+      roomPasswordInput.value = passwordFromUrl;
+    }
+
+    // 両方のパラメータが存在する場合、自動参加を試みる
+    if (roomIdFromUrl && passwordFromUrl) {
+      // 少し待ってから参加処理を開始することで、UIの準備が整うのを待つ
       setTimeout(() => {
+        // プレイヤー名がlocalStorageなどから読み込まれていれば、自動で参加処理を実行
         if (playerNameInput.value.trim()) {
           joinRoomBtn.click();
         } else {
-          alert(t('player-name-required'));
+          // プレイヤー名が未入力の場合は、入力を促す
+          showToast(t('realtime-autojoin-name-required'));
+          playerNameInput.focus();
         }
-      }, 500);
+      }, 500); // 500msの遅延
     }
   } catch (error) {
     console.error("Firebase initialization failed:", error);
@@ -1154,12 +1222,16 @@ async function createRoom() { // UIの状態を更新して、処理中である
       roomExists = snapshot.exists();
     }
 
+    // 4桁の数字パスワードを生成
+    const password = Math.floor(1000 + Math.random() * 9000).toString();
+
     state.roomId = newRoomId;
     state.roomRef = roomsRef.child(state.roomId);
     await state.roomRef.set({
       createdAt: firebase.database.ServerValue.TIMESTAMP,
       lastActivity: firebase.database.ServerValue.TIMESTAMP,
-      lastSpin: null
+      lastSpin: null,
+      password: password,
     });
 
     state.playerRef = state.roomRef.child('clients').push({
@@ -1203,6 +1275,12 @@ async function joinRoom() {
     reEnableButtons();
     return;
   }
+  const password = roomPasswordInput.value.trim();
+  if (!password) {
+    alert(t('realtime-password-required'));
+    reEnableButtons();
+    return;
+  }
 
   state.playerName = name;
   state.roomId = roomId;
@@ -1218,6 +1296,13 @@ async function joinRoom() {
     }
 
     const roomData = snapshot.val();
+
+    // Check password
+    if (roomData.password !== password) {
+      alert(t('realtime-error-password'));
+      reEnableButtons();
+      return;
+    }
     // Check for room expiration
     if (roomData.lastActivity && (Date.now() - roomData.lastActivity > ROOM_EXPIRATION_MS)) {
         alert(t('realtime-error-expired'));
@@ -1243,6 +1328,16 @@ async function joinRoom() {
         alert(t('realtime-error-blocked'));
         reEnableButtons();
         return;
+    }
+
+    // ルームの最大人数をチェック
+    const clients = roomData.clients || {};
+    const clientCount = Object.keys(clients).length;
+    if (clientCount >= 10) {
+      // このメッセージは i18n.js に追加する必要があります。
+      alert(t('realtime-error-full'));
+      reEnableButtons();
+      return;
     }
 
     state.playerRef = state.roomRef.child('clients').push({
@@ -1288,6 +1383,13 @@ function listenToRoomChanges() {
 
   // Start sending heartbeats to keep the room alive
   startActivityHeartbeat();
+
+  // ルーム作成時刻を取得してタイマーを開始
+  state.roomRef.child('createdAt').once('value', (tsSnapshot) => {
+    if (tsSnapshot.exists()) {
+      startRoomExpiryTimer(tsSnapshot.val());
+    }
+  });
 
   // 自分への通知（キック、BANなど）をリッスン
   const notificationRef = state.roomRef.child('notifications').child(state.playerRef.key);
@@ -1357,6 +1459,19 @@ function listenToRoomChanges() {
         });
       }
       setRealtimeUiState(state.isHost ? 'in_room_host' : 'in_room_viewer');
+
+      // ホストになったらパスワードを取得して、招待リンクを生成するためにUIを更新
+      if (state.isHost) {
+        state.roomRef.child('password').once('value').then(passSnapshot => {
+          if (passSnapshot.exists()) {
+            const password = passSnapshot.val();
+            state.roomPassword = password;
+            roomPasswordDisplay.textContent = password;
+            // パスワードを取得できたので、招待リンクを含むUIを再描画
+            setRealtimeUiState('in_room_host');
+          }
+        });
+      }
     } else {
       // 自分が見つからない = キックされたか、自ら退出したか、ブロックされた
       handleLeaveRoom(false); // UIリセットのみ
@@ -1374,11 +1489,38 @@ function listenToRoomChanges() {
     }
   });
 
-  // チャットメッセージの追加をリッスン
-  state.roomRef.child('chat').on('child_added', (snapshot) => {
-    const { name, message, isSystem } = snapshot.val();
-    addChatMessage(name, message, isSystem);
-  });
+  // --- チャット履歴の取得と新規メッセージの監視 ---
+  (async () => {
+    // 既存のチャットリスナーをデタッチして、重複を防ぐ
+    state.roomRef.child('chat').off();
+
+    chatMessagesEl.innerHTML = ''; // チャット表示をクリア
+    let lastMessageTimestamp = 0;
+
+    // 過去50件のメッセージを取得
+    const CHAT_HISTORY_LIMIT = 50;
+    const chatHistoryQuery = state.roomRef.child('chat').limitToLast(CHAT_HISTORY_LIMIT);
+    const historySnapshot = await chatHistoryQuery.once('value');
+    if (historySnapshot.exists()) {
+      const messages = historySnapshot.val();
+      // Firebase returns an object, we need to sort by timestamp
+      const sortedMessages = Object.values(messages).sort((a, b) => a.timestamp - b.timestamp);
+      sortedMessages.forEach(messageData => {
+        if (messageData && messageData.timestamp) {
+          addChatMessage(messageData);
+          lastMessageTimestamp = messageData.timestamp; // 最後のタイムスタンプを更新
+        }
+      });
+    }
+
+    // 履歴取得後に新規メッセージのリスナーをアタッチ
+    state.roomRef.child('chat').orderByChild('timestamp').startAt(lastMessageTimestamp + 1).on('child_added', (snapshot) => {
+      const messageData = snapshot.val();
+      if (messageData && messageData.timestamp) {
+        addChatMessage(messageData);
+      }
+    });
+  })();
 
   // フィルター情報の変更をリッスン（視聴者のみ）
   state.roomRef.child('filters').on('value', (snapshot) => {
@@ -1433,13 +1575,38 @@ function setRealtimeUiState(uiState) {
     roomJoinUi.style.display = (uiState === 'disconnected' || uiState === 'error') ? 'flex' : 'none';
     roomInfoUi.style.display = (uiState.startsWith('in_room')) ? 'flex' : 'none';
     const inRoom = uiState.startsWith('in_room');
+    const isHost = uiState === 'in_room_host';
     const isViewer = uiState === 'in_room_viewer';
     playerListContainer.style.display = inRoom ? 'block' : 'none';
-    chatContainer.style.display = inRoom ? 'block' : 'none';
+    // ルーム内にいて、タイマーが作動している場合のみ表示する
+    if (inRoom && state.roomExpiryTimer) {
+      roomTimerContainer.style.display = 'inline-flex';
+    } else {
+      roomTimerContainer.style.display = 'none';
+    }
+
+    // CSSで制御するため、bodyにクラスを付与/削除する
+    if (inRoom) {
+      document.body.classList.add('in-room');
+    } else {
+      document.body.classList.remove('in-room');
+    }
+
     if (uiState === 'disconnected') {
       chatMessagesEl.innerHTML = '';
     }
-    hostBadge.style.display = (uiState === 'in_room_host') ? 'inline-block' : 'none';
+    hostBadge.style.display = isHost ? 'inline-block' : 'none';
+    roomPasswordDisplay.style.display = isHost ? 'inline-block' : 'none';
+    $('#roomPasswordLabel').style.display = isHost ? 'inline-block' : 'none';
+    if (isHost && state.roomId && state.roomPassword) {
+      const url = new URL(window.location.origin + window.location.pathname);
+      url.searchParams.set('room', state.roomId);
+      url.searchParams.set('password', state.roomPassword);
+      inviteLinkDisplay.value = url.href;
+      inviteLinkContainer.style.display = 'flex';
+    } else {
+      inviteLinkContainer.style.display = 'none';
+    }
     playerNameInput.disabled = inRoom;
 
     // isViewerは、ルーム内の視聴者である場合にtrue。ローカルモードやホストの場合はfalse。
@@ -1469,16 +1636,24 @@ function handleLeaveRoom(removeFromDb = true) {
   // Stop sending heartbeats
   stopActivityHeartbeat();
 
+  // タイマーを停止
+  if (state.roomExpiryTimer) {
+    clearInterval(state.roomExpiryTimer);
+    state.roomExpiryTimer = null;
+  }
+
   state.roomRef = null;
   state.playerRef = null;
   state.roomId = null;
   state.isHost = false;
+  state.roomPassword = null;
 
   // 参加/作成ボタンの状態をリセットし、UIが再表示されたときに正しい状態にする
   createRoomBtn.disabled = false;
   joinRoomBtn.disabled = false;
   createRoomBtn.textContent = t('realtime-create-btn');
   joinRoomBtn.textContent = t('realtime-join-btn');
+  roomPasswordInput.value = '';
 
   setRealtimeUiState('disconnected');
   updatePlayerList([]);
@@ -1554,11 +1729,36 @@ function setupEventListeners() {
   createRoomBtn.addEventListener('click', createRoom);
   joinRoomBtn.addEventListener('click', joinRoom);
   leaveRoomBtn.addEventListener('click', () => handleLeaveRoom(true));
+  
+  copyInviteLinkBtn.addEventListener('click', async () => {
+    if (!inviteLinkDisplay.value) return;
+    inviteLinkDisplay.select();
+    try {
+      await navigator.clipboard.writeText(inviteLinkDisplay.value);
+      showToast(t('copied-to-clipboard'));
+    } catch (err) {
+      console.error('Failed to copy invite URL:', err);
+      showToast(t('copy-failed'), 'error');
+    }
+  });
   roomIdDisplay.addEventListener('click', () => navigator.clipboard.writeText(state.roomId));
   chatSendBtn.addEventListener('click', sendChatMessage);
   chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       sendChatMessage();
+    }
+  });
+
+  playerListEl.addEventListener('click', (e) => {
+    const target = e.target.closest('.player-name[data-player-name]');
+    if (!target) return;
+
+    const playerName = target.dataset.playerName;
+    if (playerName) {
+      e.stopPropagation();
+      const separator = (chatInput.value.length > 0 && !chatInput.value.endsWith(' ')) ? ' ' : '';
+      chatInput.value += `${separator}@${playerName} `;
+      chatInput.focus();
     }
   });
 
@@ -1735,3 +1935,39 @@ function init() {
 }
 
 init();
+
+/**
+ * ルームの自動解散タイマーを開始する
+ * @param {number} createdAt - ルームが作成されたタイムスタンプ
+ */
+function startRoomExpiryTimer(createdAt) {
+  if (state.roomExpiryTimer) {
+    clearInterval(state.roomExpiryTimer);
+  }
+
+  const expiryTime = createdAt + ROOM_LIFETIME_MS;
+
+  roomTimerContainer.style.display = 'inline-flex';
+
+  state.roomExpiryTimer = setInterval(() => {
+    const now = Date.now();
+    const remaining = expiryTime - now;
+
+    if (remaining <= 0) {
+      clearInterval(state.roomExpiryTimer);
+      state.roomExpiryTimer = null;
+      roomTimerContainer.style.display = 'none';
+      if (state.isHost) {
+        showToast(t('realtime-room-expired'), 'error');
+        handleLeaveRoom(true); // ホストがルームを解散
+      }
+      return;
+    }
+
+    const hours = Math.floor(remaining / (1000 * 60 * 60)).toString().padStart(2, '0');
+    const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60)).toString().padStart(2, '0');
+    const seconds = Math.floor((remaining % (1000 * 60)) / 1000).toString().padStart(2, '0');
+
+    roomTimer.textContent = `${hours}:${minutes}:${seconds}`;
+  }, 1000);
+}

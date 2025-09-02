@@ -3,7 +3,7 @@ const translations = {
     // Realtime
     'realtime-title': 'リアルタイム連携',
     'realtime-player-name-placeholder': 'オンラインプレイで表示される名前',
-    'realtime-room-id-placeholder': 'ルームID',
+    'realtime-join-placeholder': 'ルームID',
     'realtime-join-btn': '参加',
     'realtime-joining-btn': '参加中...',
     'realtime-leave-btn': '退出する',
@@ -12,8 +12,10 @@ const translations = {
     'realtime-error-create': 'ルームの作成に失敗しました。',
     'realtime-error-join': 'ルームへの参加に失敗しました。',
     'realtime-room-id': 'ルームID:',
-    'realtime-password-placeholder': 'パスワード',
-    'realtime-password': 'パスワード:',
+    'realtime-password-placeholder': 'パスワード (4桁)',
+    'realtime-room-password': 'パスワード:',
+    'realtime-error-password': 'パスワードが違います。',
+    'realtime-password-required': 'パスワードを入力してください。',
     'realtime-copy-id': 'IDをコピー',
     'realtime-copy-id-success': 'ルームIDをコピーしました！',
     'copy-password': 'パスワードをコピー',
@@ -25,6 +27,11 @@ const translations = {
     'error-wrong-password': 'パスワードが違います。',
     'password-copied': 'パスワードをクリップボードにコピーしました。',
     'password-copy-failed': 'パスワードのコピーに失敗しました。',
+    'realtime-copy-invite-link': '招待リンクをコピー',
+    'copied-to-clipboard': 'クリップボードにコピーしました！',
+    'realtime-autojoin-name-required': '自動参加するには、まずプレイヤー名を入力してください。',
+    'realtime-time-left': '自動解散まで',
+    'realtime-room-expired': 'ルームが自動解散されました。',
 
     // Header & Controls
     'app-title': 'スプラ3 ブキルーレット',
@@ -76,6 +83,7 @@ const translations = {
     'chat-title': 'チャット',
     'chat-placeholder': 'メッセージを入力',
     'chat-send-btn': '送信',
+    'chat-mention-tooltip': '{name}さんをメンションする',
 
     // System Messages
     'system-new-host': '[サーバー] {name}さんが新しいホストになりました。',
@@ -143,7 +151,7 @@ const translations = {
     // Realtime
     'realtime-title': 'Real-time Sync',
     'realtime-player-name-placeholder': 'Name used for online play',
-    'realtime-room-id-placeholder': 'Room ID',
+    'realtime-join-placeholder': 'Room ID',
     'realtime-join-btn': 'Join',
     'realtime-joining-btn': 'Joining...',
     'realtime-leave-btn': 'Leave Room',
@@ -152,8 +160,10 @@ const translations = {
     'realtime-error-create': 'Failed to create room.',
     'realtime-error-join': 'Failed to join room.',
     'realtime-room-id': 'Room ID:',
-    'realtime-password-placeholder': 'Password',
-    'realtime-password': 'Password:',
+    'realtime-password-placeholder': 'Password (4 digits)',
+    'realtime-room-password': 'Password:',
+    'realtime-error-password': 'Incorrect password.',
+    'realtime-password-required': 'Please enter the password.',
     'realtime-copy-id': 'Copy ID',
     'realtime-copy-id-success': 'Room ID copied!',
     'copy-password': 'Copy Password',
@@ -195,6 +205,9 @@ const translations = {
     'error-wrong-password': 'Incorrect password.',
     'password-copied': 'Password copied to clipboard.',
     'password-copy-failed': 'Failed to copy password.',
+    'realtime-autojoin-name-required': 'To auto-join, please enter your player name first.',
+    'realtime-time-left': 'Time Left',
+    'realtime-room-expired': 'The room has expired.',
 
     // Filters
     'filter-title': 'Filter Weapons',
@@ -216,6 +229,7 @@ const translations = {
     'chat-title': 'Chat',
     'chat-placeholder': 'Type a message',
     'chat-send-btn': 'Send',
+    'chat-mention-tooltip': 'Mention {name}',
 
     // System Messages
     'system-new-host': '[Server] {name} is the new host.',

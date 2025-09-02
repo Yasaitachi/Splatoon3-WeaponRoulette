@@ -15,14 +15,26 @@
           <strong data-i18n-key="realtime-title"></strong>
           <input type="text" id="playerNameInput" class="input-text" data-i18n-placeholder="realtime-player-name-placeholder" maxlength="20">
           <input type="text" id="roomIdInput" class="input-text" data-i18n-placeholder="realtime-join-placeholder" maxlength="12" pattern="[0-9]*" inputmode="numeric">
+          <input type="text" id="roomPasswordInput" class="input-text" data-i18n-placeholder="realtime-password-placeholder" maxlength="4" pattern="[0-9]*" inputmode="numeric">
           <button id="joinRoomBtn" class="btn secondary" data-i18n-key="realtime-join-btn"></button>
           <span class="muted" style="margin: 0 4px;">or</span>
           <button id="createRoomBtn" class="btn secondary" data-i18n-key="realtime-create-btn"></button>
         </div>
         <div id="room-info-ui" style="display: none;">
-          <span data-i18n-key="realtime-room-id"></span> <code id="roomIdDisplay"></code>
-          <span id="host-badge" class="pill" style="display:none;" data-i18n-key="realtime-host"></span>
-          <button id="leaveRoomBtn" class="btn danger" data-i18n-key="realtime-leave-btn" style="padding: 4px 10px; font-size: 13px;">退出</button>
+          <div id="room-details-line" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+            <span data-i18n-key="realtime-room-id"></span> <code id="roomIdDisplay"></code>
+            <span data-i18n-key="realtime-room-password" id="roomPasswordLabel" style="display:none;"></span> <code id="roomPasswordDisplay" style="display:none;"></code>
+            <span id="host-badge" class="pill" style="display:none;" data-i18n-key="realtime-host"></span>
+            <div id="room-timer-container" class="pill" style="display: none; align-items: baseline;">
+              <span data-i18n-key="realtime-time-left" style="font-size: 10px; margin-right: 4px;"></span>
+              <span id="room-timer"></span>
+            </div>
+            <button id="leaveRoomBtn" class="btn danger" data-i18n-key="realtime-leave-btn" style="padding: 4px 10px; font-size: 13px;">退出</button>
+          </div>
+          <div id="invite-link-container" style="display: none;">
+            <input type="text" id="inviteLinkDisplay" class="input-text" readonly>
+            <button id="copyInviteLinkBtn" class="btn secondary" data-i18n-key="realtime-copy-invite-link">コピー</button>
+          </div>
         </div>
       </div>
     </header>
@@ -57,7 +69,7 @@
           <div class="ticker"></div>
         </div>
         <!-- ▼ここから追加：確率表 -->
-        <div class="card" style="margin-top:12px;">
+        <div id="probSection" class="card" style="margin-top:12px;">
           <strong data-i18n-key="prob-title">各ブキの排出確率</strong>
           <div id="probTableWrap" class="custom-scrollbar" style="max-height:220px;overflow:auto;margin-top:8px;">
             <table id="probTable" style="width:100%;border-collapse:collapse;font-size:13px;">
@@ -75,15 +87,8 @@
       </section>
 
       <aside class="card">
-        <div style="display:flex; justify-content:space-between; align-items: center; margin-bottom:8px;">
-          <strong data-i18n-key="history-title">履歴</strong>
-          <span id="historyCount" class="muted">0 件</span>
-        </div>
-        <div id="history" class="history custom-scrollbar">
-          <div class="empty" data-i18n-key="history-empty">まだ結果がありません</div>
-        </div>
         <!-- Player List Section -->
-        <div id="player-list-container" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--card-border);">
+        <div id="player-list-container">
           <div style="display:flex; justify-content:space-between; align-items: center; margin-bottom:8px;">
             <strong data-i18n-key="player-list-title">参加者</strong>
             <span id="playerCountDisplay" class="muted">0 人</span>
@@ -93,13 +98,21 @@
           </div>
         </div>
         <!-- Chat Section -->
-        <div id="chat-container" style="display: none; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--card-border);">
+        <div id="chat-container">
           <strong data-i18n-key="chat-title">チャット</strong>
           <div id="chat-messages" class="chat-messages custom-scrollbar"></div>
           <div class="chat-input-area">
-            <input type="text" id="chatInput" class="input-text" data-i18n-placeholder="chat-placeholder">
+            <input type="text" id="chatInput" class="input-text" data-i18n-placeholder="chat-placeholder" maxlength="100">
             <button id="chatSendBtn" class="btn secondary" data-i18n-key="chat-send-btn">送信</button>
           </div>
+        </div>
+        <!-- History Section -->
+        <div style="display:flex; justify-content:space-between; align-items: center; margin-bottom:8px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--card-border);">
+          <strong data-i18n-key="history-title">履歴</strong>
+          <span id="historyCount" class="muted">0 件</span>
+        </div>
+        <div id="history" class="history custom-scrollbar">
+          <div class="empty" data-i18n-key="history-empty">まだ結果がありません</div>
         </div>
       </aside>
     </div>
