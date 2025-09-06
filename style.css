@@ -874,10 +874,6 @@ body.offline::before {
 }
 
 .toast {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
   background-color: rgba(var(--panel-rgb), 0.9);
   color: var(--text);
   padding: 10px 20px 15px; /* プログレスバーのためのスペースを確保 */
@@ -910,12 +906,6 @@ body.offline::before {
 .toast.show {
   opacity: 1;
   transform: translateY(0);
-}
-
-.toast-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: center;
 }
 
 /* Toast Progress Bar Styles */

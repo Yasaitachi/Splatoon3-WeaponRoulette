@@ -271,7 +271,6 @@ async function updatePlayerNameAndId() {
     // プレイヤー情報が確定したので、フレンド関連のリスナーを開始
     listenToFriends();
     listenToFriendRequests();
-    listenToInvitations();
   } catch (error) {
     showServerError(t('player-settings-update-failed'), error);
   } finally {
@@ -284,38 +283,14 @@ async function updatePlayerNameAndId() {
  * @param {string} message - 表示するメッセージ
  * @param {string} [type='info'] - トーストの種類 ('success', 'error', 'info')
  * @param {number} [duration=3000] - 表示時間 (ミリ秒)
- * @param {Array<Object>} [actions=[]] - ボタンのアクション定義
  */
-function showToast(message, type = 'info', duration = 3000, actions = []) {
+function showToast(message, type = 'info', duration = 3000) {
   const toastContainer = document.getElementById('toast-container');
   if (!toastContainer) return;
 
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-
-  const messageEl = document.createElement('div');
-  messageEl.className = 'toast-message';
-  messageEl.textContent = message;
-  toast.appendChild(messageEl);
-
-  if (actions.length > 0) {
-    const actionsContainer = document.createElement('div');
-    actionsContainer.className = 'toast-actions';
-    actions.forEach(action => {
-      const button = document.createElement('button');
-      button.className = `btn ${action.className || 'secondary'}`;
-      button.textContent = action.text;
-      button.style.padding = '4px 10px';
-      button.style.fontSize = '13px';
-      button.onclick = () => {
-        action.callback();
-        toast.classList.remove('show');
-        toast.addEventListener('transitionend', () => toast.remove());
-      };
-      actionsContainer.appendChild(button);
-    });
-    toast.appendChild(actionsContainer);
-  }
+  toast.textContent = message;
 
   // プログレスバーを追加
   const progressBar = document.createElement('div');
@@ -1514,32 +1489,17 @@ function renderFriendsList() {
     friendsListEl.innerHTML = `<div class="empty" data-i18n-key="friends-list-empty">${t('friends-list-empty')}</div>`;
     return;
   }
-  const inRoom = !!state.roomId;
-  const playerIdsInRoom = state.players.map(p => p.id);
-
-  friendsListEl.innerHTML = state.friends.map(friend => {
-    let actionButton = '';
-    if (inRoom && state.isHost) { // ホストのみが招待可能
-      if (playerIdsInRoom.includes(friend.id)) {
-        actionButton = `<button class="btn secondary" disabled style="padding: 2px 8px; font-size: 12px;">${t('friends-already-in-room')}</button>`;
-      } else {
-        actionButton = `<button class="btn secondary" data-action="invite-friend" data-id="${friend.id}" data-name="${escapeHTML(friend.name)}" style="padding: 2px 8px; font-size: 12px;">${t('friends-invite-to-room')}</button>`;
-      }
-    }
-
-    return `
+  friendsListEl.innerHTML = state.friends.map(friend => `
     <div class="player-item">
       <div class="player-name">
         <span class="player-id-display">#${friend.shortId}</span>
         <span>${escapeHTML(friend.name)}</span>
       </div>
       <div class="player-actions">
-        ${actionButton}
         <button class="btn danger" data-action="remove-friend" data-id="${friend.id}" data-name="${escapeHTML(friend.name)}" style="padding: 2px 8px; font-size: 12px;">${t('friends-remove')}</button>
       </div>
     </div>
-    `;
-  }).join('');
+  `).join('');
 }
 
 /**
@@ -1585,32 +1545,6 @@ function applyFiltersFromFirebase(filters) {
   if (filters.noRepeat !== undefined) noRepeat.checked = filters.noRepeat;
 
   updatePool();
-}
-
-/**
- * フレンドを現在のルームに招待する
- * @param {string} targetUserId
- * @param {string} targetUserName
- */
-async function inviteFriendToRoom(targetUserId, targetUserName) {
-  if (!state.roomId || !state.roomPassword) {
-    showToast(t('friends-not-in-room'), 'error');
-    return;
-  }
-  const myId = getPersistentUserId();
-  const invitationData = {
-    inviterId: myId,
-    inviterName: state.playerName,
-    roomId: state.roomId,
-    roomPassword: state.roomPassword,
-    timestamp: firebase.database.ServerValue.TIMESTAMP,
-  };
-  try {
-    await firebase.database().ref(`invitations/${targetUserId}`).push(invitationData);
-    showToast(t('friends-invite-sent', { name: targetUserName }), 'success');
-  } catch (error) {
-    showServerError(t('friends-invite-fail'), error);
-  }
 }
 
 // --- リアルタイム連携 (Firebase) ------------------------------------
@@ -1997,7 +1931,6 @@ function listenToRoomChanges() {
 
       state.players = playerArray;
       updatePlayerList(playerArray);
-      renderFriendsList(); // ルームメンバーの変更をフレンドリストに反映
 
       const me = playerArray.find(p => p.id === state.playerRef?.key);
       if (me) {
@@ -2196,7 +2129,6 @@ function handleLeaveRoom(removeFromDb = true) {
 
   setRealtimeUiState('disconnected');
   updatePlayerList([]);
-  renderFriendsList(); // ルーム退出をフレンドリストに反映
 
   // Clear online history and load local history
   state.history = [];
@@ -2375,7 +2307,7 @@ function setupEventListeners() {
     if (e.target === friendsModal) friendsModal.style.display = 'none';
   });
 
-  friendSearchBtn.addEventListener('click', async () => {
+  friendSearchBtn?.addEventListener('click', async () => {
     const query = friendSearchInput.value.replace('#', '').trim();
     if (!query) return;
     showLoader();
@@ -2383,11 +2315,11 @@ function setupEventListeners() {
     renderFriendSearchResult(user);
     hideLoader();
   });
-  friendSearchInput.addEventListener('keydown', (e) => {
+  friendSearchInput?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') friendSearchBtn.click();
   });
 
-  friendSearchResultEl.addEventListener('click', (e) => {
+  friendSearchResultEl?.addEventListener('click', (e) => {
     const target = e.target.closest('[data-action="send-friend-request"]');
     if (target) {
       sendFriendRequest(target.dataset.id);
@@ -2409,10 +2341,6 @@ function setupEventListeners() {
     const removeBtn = e.target.closest('[data-action="remove-friend"]');
     if (removeBtn) {
       removeFriend(removeBtn.dataset.id, removeBtn.dataset.name);
-    }
-    const inviteBtn = e.target.closest('[data-action="invite-friend"]');
-    if (inviteBtn) {
-      inviteFriendToRoom(inviteBtn.dataset.id, inviteBtn.dataset.name);
     }
   });
 
@@ -2651,53 +2579,11 @@ function init() {
         // プレイヤー情報が確定したので、フレンド関連のリスナーを開始
         listenToFriends();
         listenToFriendRequests();
-        listenToInvitations();
       } catch (error) {
         console.error("Failed to load initial player ID:", error);
       }
     }
   })();
-}
-
-/**
- * ルームへの招待をリッスンする
- */
-function listenToInvitations() {
-  const myId = getPersistentUserId();
-  if (!myId || !state.db) return;
-  const invitationsRef = state.db.ref(`invitations/${myId}`);
-
-  // 既存のリスナーをデタッチ
-  invitationsRef.off();
-
-  invitationsRef.on('child_added', (snapshot) => {
-    const invitation = snapshot.val();
-    const invitationKey = snapshot.key;
-    if (!invitation) return;
-
-    // 自分が既にルームにいる場合は招待を無視して削除
-    if (state.roomId) {
-      invitationsRef.child(invitationKey).remove();
-      return;
-    }
-
-    const message = t('friends-invite-received-body', { name: invitation.inviterName });
-    const actions = [
-      {
-        text: t('friends-invite-join'),
-        className: 'success',
-        callback: () => {
-          friendsModal.style.display = 'none'; // 他のモーダルを閉じる
-          roomIdInput.value = invitation.roomId;
-          roomPasswordInput.value = invitation.roomPassword;
-          joinRoom();
-          invitationsRef.child(invitationKey).remove();
-        }
-      },
-      { text: t('friends-invite-decline'), className: 'danger', callback: () => invitationsRef.child(invitationKey).remove() }
-    ];
-    showToast(message, 'info', 15000, actions);
-  });
 }
 
 /**
