@@ -11,29 +11,17 @@
     <header>
       <h1 data-i18n-key="app-title">スプラトゥーン3｜ブキルーレット</h1>
       <div id="realtime-controls">
-        <div id="room-join-ui">
-          <strong data-i18n-key="realtime-title"></strong>
-          <input type="text" id="playerNameInput" class="input-text" data-i18n-placeholder="realtime-player-name-placeholder" maxlength="20">
-          <input type="text" id="roomIdInput" class="input-text" data-i18n-placeholder="realtime-join-placeholder" maxlength="12" pattern="[0-9]*" inputmode="numeric">
-          <input type="text" id="roomPasswordInput" class="input-text" data-i18n-placeholder="realtime-password-placeholder" maxlength="4" pattern="[0-9]*" inputmode="numeric">
-          <button id="joinRoomBtn" class="btn secondary" data-i18n-key="realtime-join-btn"></button>
-          <span class="muted" style="margin: 0 4px;">or</span>
-          <button id="createRoomBtn" class="btn secondary" data-i18n-key="realtime-create-btn"></button>
-        </div>
         <div id="room-info-ui" style="display: none;">
           <div id="room-details-line" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
             <span data-i18n-key="realtime-room-id"></span> <code id="roomIdDisplay"></code>
             <span data-i18n-key="realtime-room-password" id="roomPasswordLabel" style="display:none;"></span> <code id="roomPasswordDisplay" style="display:none;"></code>
+            <button id="copyInviteLinkBtn" class="btn secondary" data-i18n-key="realtime-copy-invite-link" style="padding: 4px 10px; font-size: 13px; display: none;">コピー</button>
             <span id="host-badge" class="pill" style="display:none;" data-i18n-key="realtime-host"></span>
             <div id="room-timer-container" class="pill" style="display: none; align-items: baseline;">
               <span data-i18n-key="realtime-time-left" style="font-size: 10px; margin-right: 4px;"></span>
               <span id="room-timer"></span>
             </div>
             <button id="leaveRoomBtn" class="btn danger" data-i18n-key="realtime-leave-btn" style="padding: 4px 10px; font-size: 13px;">退出</button>
-          </div>
-          <div id="invite-link-container" style="display: none;">
-            <input type="text" id="inviteLinkDisplay" class="input-text" readonly>
-            <button id="copyInviteLinkBtn" class="btn secondary" data-i18n-key="realtime-copy-invite-link">コピー</button>
           </div>
         </div>
       </div>
@@ -53,6 +41,15 @@
       <div class="controls-divider host-control"></div>
       <button id="fullscreenBtn" class="btn secondary icon" data-i18n-title="fullscreen" data-i18n-aria-label="fullscreen-toggle">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
+      </button>
+      <button id="playerSettingsBtn" class="btn secondary icon" data-i18n-title="player-settings-title">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+      </button>
+      <button id="friendsBtn" class="btn secondary icon" data-i18n-title="friends-title">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+      </button>
+      <button id="openRealtimeBtn" class="btn secondary icon" data-i18n-title="realtime-settings-title">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 20V4"></path></svg>
       </button>
       <button id="settingsBtn" class="btn secondary icon" data-i18n-title="settings">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
@@ -103,6 +100,9 @@
           <div id="chat-messages" class="chat-messages custom-scrollbar"></div>
           <div class="chat-input-area">
             <input type="text" id="chatInput" class="input-text" data-i18n-placeholder="chat-placeholder" maxlength="100">
+            <button id="voiceInputBtn" class="btn secondary icon" data-i18n-title="chat-voice-input-start">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path><path d="M19 10v2a7 7 0 0 1-14 0v-2"></path><line x1="12" y1="19" x2="12" y2="22"></line></svg>
+            </button>
             <button id="chatSendBtn" class="btn secondary" data-i18n-key="chat-send-btn">送信</button>
           </div>
         </div>
@@ -155,6 +155,14 @@
               </label>
             </div>
             <p class="muted small" data-i18n-key="settings-auto-copy-help">抽選完了後、結果をテキスト形式でクリップボードにコピーします。</p>
+            <div class="setting-item row" id="wakeLockSetting" style="display: none;">
+              <label for="preventSleep" data-i18n-key="settings-prevent-sleep">画面のスリープを防止</label>
+              <label class="toggle-switch">
+                <input type="checkbox" id="preventSleep">
+                <span class="slider"></span>
+              </label>
+            </div>
+            <p class="muted small" id="wakeLockHelp" style="display: none;" data-i18n-key="settings-prevent-sleep-help">このページを開いている間、端末がスリープ状態になるのを防ぎます。</p>
           </div>
           <div class="settings-section">
             <h3 data-i18n-key="settings-webhook-title">Discord Webhook連携</h3>
@@ -188,6 +196,90 @@
       </div>
     </div>
 
+    <div id="realtimeModal" class="modal-overlay" style="display: none;">
+      <div class="modal-content card">
+        <div class="modal-header">
+          <h2 data-i18n-key="realtime-settings-title">オンライン設定</h2>
+          <button id="closeRealtimeBtn" class="btn icon secondary" data-i18n-aria-label="settings-close" title="設定を閉じる">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="settings-section">
+            <h3 data-i18n-key="realtime-join-title">ルームに参加</h3>
+            <div class="setting-item">
+              <label for="roomIdInput" data-i18n-key="realtime-join-placeholder">ルームID</label>
+              <input type="text" id="roomIdInput" class="input-text" data-i18n-placeholder="realtime-join-placeholder" maxlength="12" pattern="[0-9]*" inputmode="numeric">
+            </div>
+            <div class="setting-item">
+              <label for="roomPasswordInput" data-i18n-key="realtime-password-placeholder">パスワード</label>
+              <input type="text" id="roomPasswordInput" class="input-text" data-i18n-placeholder="realtime-password-placeholder" maxlength="4" pattern="[0-9]*" inputmode="numeric">
+            </div>
+            <div class="setting-control" style="justify-content: flex-end;">
+              <button id="joinRoomBtn" class="btn secondary" data-i18n-key="realtime-join-btn">参加する</button>
+            </div>
+          </div>
+          <div class="modal-divider"><span data-i18n-key="or-divider">または</span></div>
+          <button id="createRoomBtn" class="btn" data-i18n-key="realtime-create-btn" style="width: 100%;">新しいルームを作成</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="playerSettingsModal" class="modal-overlay" style="display: none;">
+      <div class="modal-content card">
+        <div class="modal-header">
+          <h2 data-i18n-key="player-settings-title">プレイヤー設定</h2>
+          <button id="closePlayerSettingsBtn" class="btn icon secondary" data-i18n-aria-label="settings-close" title="設定を閉じる">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="setting-item">
+            <label for="settingsPlayerNameInput" data-i18n-key="realtime-player-name-placeholder">プレイヤー名</label>
+            <input type="text" id="settingsPlayerNameInput" class="input-text" data-i18n-placeholder="realtime-player-name-placeholder" maxlength="20">
+          </div>
+          <div class="setting-control" style="justify-content: flex-end;">
+            <button id="confirmPlayerSettingsBtn" class="btn"><span data-i18n-key="player-settings-confirm">決定</span></button>
+          </div>
+          <div class="modal-divider"></div>
+          <div class="setting-item" style="align-items: center;">
+            <strong data-i18n-key="player-id-label">あなたのプレイヤーID</strong>
+            <div id="playerShortIdDisplay" class="player-id-display-large">#-----</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Friend Management Modal -->
+    <div id="friendsModal" class="modal-overlay" style="display: none;">
+      <div class="modal-content card">
+        <div class="modal-header">
+          <h2 data-i18n-key="friends-modal-title">フレンド管理</h2>
+          <button id="closeFriendsModalBtn" class="btn icon secondary" data-i18n-aria-label="settings-close" title="閉じる">&times;</button>
+        </div>
+        <div class="modal-body custom-scrollbar">
+          <!-- Search Section -->
+          <div class="settings-section">
+            <h3 data-i18n-key="friends-search-user">プレイヤーを検索</h3>
+            <div class="setting-item">
+              <div class="chat-input-area">
+                <input type="text" id="friendSearchInput" class="input-text" data-i18n-placeholder="friends-search-placeholder" maxlength="6">
+                <button id="friendSearchBtn" class="btn secondary" data-i18n-key="friends-search-btn">検索</button>
+              </div>
+            </div>
+            <div id="friendSearchResult" style="margin-top: 12px;"></div>
+          </div>
+
+          <!-- Friend Requests Section -->
+          <div class="settings-section">
+            <h3 data-i18n-key="friends-requests-received">受信した申請</h3>
+            <div id="friendRequestsList" class="player-list custom-scrollbar" style="max-height: 150px;"></div>
+          </div>
+
+          <!-- Friend List Section -->
+          <div class="settings-section">
+            <h3 data-i18n-key="friends-list">フレンドリスト</h3>
+            <div id="friendsList" class="player-list custom-scrollbar" style="max-height: 200px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
   <!-- Firebase SDK -->
   <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
@@ -202,8 +294,9 @@
   <div id="toast-container"></div>
 
   <!-- Loading Overlay -->
-  <div id="loader-overlay" class="loader-overlay" style="display: none;">
+  <div id="loader-overlay" class="loader-overlay">
     <div class="loader-spinner"></div>
+    <div id="loader-text" class="loader-text"></div>
   </div>
 </body>
 </html>

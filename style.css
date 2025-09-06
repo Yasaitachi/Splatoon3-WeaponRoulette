@@ -7,6 +7,7 @@
   --text: #e9f0ff;
   --muted: #9fb0d0;
   --danger: #ff6b9a;
+  --danger-rgb: 255, 107, 154;
   --btn-text: #0a0f1c;
   --card-border: rgba(255,255,255,.08);
   --card-bg: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.02));
@@ -30,6 +31,7 @@ html[data-theme="light"] {
   --text: #212529;
   --muted: #6c757d;
   --danger: #dc3545;
+  --danger-rgb: 220, 53, 69;
   --btn-text: #ffffff;
   --card-border: #dee2e6;
   --card-bg: #ffffff;
@@ -131,7 +133,6 @@ h1 { margin: 0; font-size: clamp(20px, 3vw, 28px); letter-spacing: .02em; }
   margin: 0;
   font-size: clamp(18px, 3vw, 24px);
   font-weight: 800;
-  display: none; /* 複数人抽選の結果リストを非表示にする */
 }
 .result-list li {
   align-items: center;
@@ -279,6 +280,22 @@ a.link { color: var(--accent); text-decoration: none; border-bottom:1px dotted v
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
 }
+.modal-divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+}
+.modal-divider::before,
+.modal-divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--card-border);
+}
+.modal-divider > span {
+  padding: 0 1em;
+}
 .modal-content {
   width: min(500px, 90vw);
   max-height: 90vh;
@@ -406,13 +423,13 @@ input:checked + .slider:before {
 
 /* Chat */
 #chat-container {
-  display: none !important; /* デフォルトでは非表示 */
+  display: none; /* デフォルトでは非表示 */
   flex-direction: column;
 }
 
 /* ルームに参加した場合はチャットを表示する */
 body.in-room #chat-container {
-  display: flex !important;
+  display: flex;
 }
 
 .chat-messages {
@@ -420,41 +437,48 @@ body.in-room #chat-container {
   height: 180px;
   max-height: 180px;
   overflow-y: auto;
-  margin-top: 8px;
-  margin-bottom: 8px;
+  margin: 8px 0;
   display: flex;
-  flex-direction: column;
-  gap: 4px; /* メッセージ間のgapを少し詰める */
+  flex-direction: column; /* メッセージを縦に並べる */
   padding: 8px 12px; /* 左右の余白を確保 */
 }
 
-/* 個々のメッセージのコンテナ (デフォルトは他人 = 右寄せ) */
+/* 個々のメッセージのコンテナ (デフォルトは他人 = 左寄せ) */
 .chat-message {
   display: flex;
   align-items: flex-end; /* タイムスタンプを吹き出しの下端に合わせる */
   gap: 8px;
   max-width: 100%;
-  justify-content: flex-end; /* 他人のメッセージを右寄せ */
+  justify-content: flex-start; /* 他人のメッセージを左寄せ */
+  flex-direction: row; /* 通常の順序 */
+}
+
+/* 異なる送信者間のメッセージにマージンを設定 */
+.chat-message + .chat-message {
+  margin-top: 12px;
+}
+/* 同じ送信者による連続投稿の場合はマージンを詰める */
+.chat-message.consecutive {
+  margin-top: 4px;
+}
+
+/* 自分のメッセージは右寄せ */
+.chat-message.own {
+  justify-content: flex-end; /* 右寄せに上書き */
   flex-direction: row-reverse; /* タイムスタンプとコンテンツの順序を入れ替える */
 }
 
-/* 自分のメッセージは左寄せ */
-.chat-message.own {
-  justify-content: flex-start; /* 左寄せに上書き */
-  flex-direction: row; /* 通常の順序に上書き */
-}
-
-/* 名前と吹き出しをまとめるコンテナ (デフォルトは他人 = 右寄せ) */
+/* 名前と吹き出しをまとめるコンテナ (デフォルトは他人 = 左寄せ) */
 .chat-content {
   display: flex;
   flex-direction: column;
-  align-items: flex-end; /* 他人のメッセージは右寄せ */
+  align-items: flex-start; /* 他人のメッセージは左寄せ */
   max-width: 75%;
 }
 
-/* 自分のメッセージは左寄せ */
+/* 自分のメッセージは右寄せ */
 .chat-message.own .chat-content {
-  align-items: flex-start; /* 左寄せに上書き */
+  align-items: flex-end; /* 右寄せに上書き */
 }
 
 /* 送信者名 (他人用) */
@@ -463,13 +487,18 @@ body.in-room #chat-container {
   font-weight: 600;
   color: var(--muted);
   margin-bottom: 4px;
-  margin-right: 12px; /* 吹き出しのしっぽ分、少しインデント */
+  margin-left: 12px; /* 吹き出しのしっぽ分、少しインデント */
+}
+
+/* 連続投稿の場合は送信者名を非表示にする */
+.chat-message.consecutive .chat-author {
+  display: none;
 }
 
 /* 吹き出しのスタイル (デフォルトは他人用) */
 .chat-bubble {
   position: relative;
-  background-color: var(--chip-bg);
+  background-color: var(--panel); /* 背景色を少し濃くして区別 */
   border: 1px solid var(--card-border);
   border-radius: 18px;
   padding: 10px 14px;
@@ -478,28 +507,28 @@ body.in-room #chat-container {
   word-break: break-word; /* 長い単語を折り返す */
 }
 
-/* 吹き出しのしっぽ（右側、他人用） */
+/* 吹き出しのしっぽ（左側、他人用） */
 .chat-bubble::before {
   content: '';
   position: absolute;
   top: 8px;
-  right: -8px;
+  left: -8px;
   width: 0;
   height: 0;
   border-style: solid;
-  border-width: 6px 0 6px 10px;
-  border-color: transparent transparent transparent var(--card-border);
+  border-width: 6px 10px 6px 0;
+  border-color: transparent var(--card-border) transparent transparent;
 }
 .chat-bubble::after {
   content: '';
   position: absolute;
   top: 8px;
-  right: -7px;
+  left: -7px;
   width: 0;
   height: 0;
   border-style: solid;
-  border-width: 6px 0 6px 10px;
-  border-color: transparent transparent transparent var(--chip-bg);
+  border-width: 6px 10px 6px 0;
+  border-color: transparent var(--panel) transparent transparent;
 }
 
 /* 自分のメッセージの吹き出しの色 (LINE風) */
@@ -514,18 +543,22 @@ html[data-theme="dark"] .chat-message.own .chat-bubble {
   border-color: transparent;
 }
 
-/* 自分のメッセージのしっぽ（左側） */
+/* 吹き出しの角丸を調整して、より吹き出しらしくする */
+.chat-bubble { border-top-left-radius: 4px; }
+.chat-message.own .chat-bubble { border-radius: 18px; border-top-right-radius: 4px; }
+
+/* 自分のメッセージのしっぽ（右側） */
 .chat-message.own .chat-bubble::before {
   display: none; /* 枠線用のしっぽは不要 */
 }
 .chat-message.own .chat-bubble::after {
-  left: -7px;
-  right: auto;
-  border-width: 6px 10px 6px 0;
-  border-color: transparent #8de055 transparent transparent;
+  left: auto;
+  right: -7px;
+  border-width: 6px 0 6px 10px;
+  border-color: transparent transparent transparent #8de055;
 }
 html[data-theme="dark"] .chat-message.own .chat-bubble::after {
-  border-color: transparent #3d8c40 transparent transparent;
+  border-color: transparent transparent transparent #3d8c40;
 }
 
 /* メンションされたメッセージのハイライト */
@@ -536,10 +569,10 @@ html[data-theme="dark"] .chat-message.own .chat-bubble::after {
 
 /* メンション時の吹き出しのしっぽの色も変更 */
 .chat-message.mention .chat-bubble::before {
-  border-left-color: var(--accent);
+  border-right-color: var(--accent);
 }
 .chat-message.mention .chat-bubble::after {
-  border-left-color: rgba(var(--accent-rgb), 0.15);
+  border-right-color: rgba(var(--accent-rgb), 0.15);
 }
 
 /* 自分のメッセージがメンションされた場合（緑の吹き出し）は、影をつけて強調 */
@@ -560,14 +593,24 @@ html[data-theme="dark"] .chat-message.own .chat-bubble::after {
 
 /* システムメッセージ */
 .chat-message.system {
-  justify-content: center;
-  color: var(--muted);
-  font-style: italic;
-  font-size: 12px;
-  padding: 8px 0;
-  /* flex-endを上書き */
+  display: flex;
   align-items: center;
-  flex-direction: row; /* システムメッセージは通常の向き */
+  text-align: center;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 12px 0;
+}
+.chat-message.system::before,
+.chat-message.system::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--card-border);
+}
+.chat-message.system:not(:empty)::before {
+  margin-right: .5em;
+}
+.chat-message.system:not(:empty)::after {
+  margin-left: .5em;
 }
 
 /* 入力エリア */
@@ -578,6 +621,12 @@ html[data-theme="dark"] .chat-message.own .chat-bubble::after {
 .chat-input-area .input-text {
   flex-grow: 1;
 }
+.chat-input-area #voiceInputBtn.listening {
+  background-color: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
 
 /* Player List */
 .player-list {
@@ -605,6 +654,30 @@ html[data-theme="dark"] .chat-message.own .chat-bubble::after {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* プレイヤーIDのスタイル */
+.player-id-display {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  min-width: 55px; /* 番号が5桁になってもレイアウトが崩れないように */
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.player-id-display-large {
+  font-size: 24px;
+  font-weight: bold;
+  text-align: center;
+  padding: 16px;
+  background-color: var(--chip-bg);
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 2px;
+  color: var(--accent);
+  width: 100%;
+  margin-top: 8px;
 }
 
 .player-actions {
@@ -654,7 +727,6 @@ html[data-theme="dark"] .chat-message.own .chat-bubble::after {
 .admin-menu-item:hover { background-color: var(--accent); color: var(--btn-text); }
 .admin-menu-item.block:hover { background-color: var(--danger); }
 .admin-menu-item.ban:hover { background-color: #ff9800; }
-
 .admin-menu-divider {
   height: 1px;
   background-color: var(--card-border);
@@ -667,11 +739,6 @@ html[data-theme="dark"] .chat-message.own .chat-bubble::after {
   align-items: center;
   gap: 12px;
 }
-#room-join-ui { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-#realtime-controls .input-text { padding: 6px 10px; font-size: 14px; }
-#realtime-controls #playerNameInput { width: 150px; }
-#realtime-controls #roomIdInput { width: 120px; }
-#realtime-controls #roomPasswordInput { width: 90px; }
 #realtime-controls .btn { padding: 6px 12px; font-size: 14px; }
 #room-info-ui { display: flex; flex-direction: column; gap: 8px; } /* Changed to column for better layout of multiple lines */
 #roomIdDisplay, #roomPasswordDisplay { font-weight: bold; background: rgba(0,0,0,.2); padding: 2px 6px; border-radius: 4px; user-select: all; cursor: pointer; }
@@ -744,6 +811,7 @@ html[data-theme="dark"] .chat-message.own .chat-bubble::after {
   position: fixed;
   inset: 0;
   background-color: rgba(0, 0, 0, 0.5);
+  flex-direction: column;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -769,6 +837,12 @@ html[data-theme="dark"] .chat-message.own .chat-bubble::after {
   animation: spin 1s linear infinite;
 }
 
+.loader-text {
+  margin-top: 16px;
+  color: var(--text);
+  font-weight: bold;
+}
+
 body.offline::before {
   content: attr(data-reconnecting-text);
   position: fixed;
@@ -785,25 +859,29 @@ body.offline::before {
   animation: pulse 2s infinite;
 }
 
-/* --- Toast Notification --- */
+/* Toast Notification Styles */
 #toast-container {
   position: fixed;
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 1500; /* modalよりは上、loaderよりは下 */
+  z-index: 2500; /* 最前面に表示 */
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  pointer-events: none; /* Toast自体はクリックできないようにする */
+  pointer-events: none; /* Toast自体はクリックできないように */
 }
 
 .toast {
-  background-color: rgba(var(--panel-rgb), 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  background-color: rgba(var(--panel-rgb), 0.9);
   color: var(--text);
-  padding: 10px 20px;
-  border-radius: 999px;
+  padding: 10px 20px 15px; /* プログレスバーのためのスペースを確保 */
+  border-radius: 8px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.2);
   border: 1px solid var(--card-border);
   font-size: 14px;
@@ -811,8 +889,22 @@ body.offline::before {
   opacity: 0;
   transform: translateY(20px);
   transition: opacity 0.3s ease, transform 0.3s ease;
-  -webkit-backdrop-filter: blur(5px);
-  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  max-width: min(500px, 90vw);
+  text-align: center;
+}
+
+.toast.success {
+  background-color: rgba(61, 140, 64, 0.9);
+  border-color: #4caf50;
+  color: #fff;
+}
+
+.toast.error {
+  background-color: rgba(var(--danger-rgb), 0.9);
+  border-color: var(--danger);
+  color: #fff;
 }
 
 .toast.show {
@@ -820,6 +912,32 @@ body.offline::before {
   transform: translateY(0);
 }
 
+.toast-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+/* Toast Progress Bar Styles */
+.toast-progress-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 5px; /* バーの高さ */
+  width: 100%;
+  background-color: rgba(255, 255, 255, 0.3); /* バーの色 */
+  border-bottom-left-radius: 8px; /* トーストの角に合わせて丸める */
+  border-bottom-right-radius: 8px;
+  animation: progressBarShrink linear forwards; /* アニメーション */
+}
+
+/* プログレスバーのアニメーション */
+@keyframes progressBarShrink {
+  from { width: 100%; }
+  to { width: 0%; }
+}
+
+/* その他のアニメーション */
 @keyframes spin {
   to {
     transform: rotate(360deg);

@@ -1,6 +1,9 @@
 // --- Firebase Configuration -----------------------------------------------
 
 // ▼▼▼ PASTE FIREBASE CONFIG HERE ▼▼▼
+// WARNING: Do not commit this file with your actual API key to a public repository.
+// Google may disable the key for security reasons. Consider using environment variables
+// or a git-ignored configuration file for production applications.
 // For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
   apiKey: "AIzaSyDU1_EpLI3SXLYIiDdC52OJf8f6EcaVDgs",
@@ -18,7 +21,7 @@ const firebaseConfig = {
 // --- グローバル変数 ---------------------------------------------------------
 const APP_VERSION = '1.2.0'; // アプリケーションのバージョン。更新時にこの数値を変更する。
 const RESET_TIMEOUT_MS = 10000; // 10秒
-const ROOM_EXPIRATION_MS = 30 * 60 * 1000; // 30分
+const ROOM_EXPIRATION_MS = 10 * 60 * 1000; // 10分
 const ROOM_LIFETIME_MS = 3 * 60 * 60 * 1000; // 3時間
 const state = {
   running: false,
@@ -39,6 +42,9 @@ const state = {
   theme: 'system',
   roomPassword: null,
   roomExpiryTimer: null,
+  // Friend system state
+  friends: [],
+  friendRequests: [],
 };
 
 const ICONS = {
@@ -58,8 +64,6 @@ const fullscreenBtn = $('#fullscreenBtn');
 const settingsBtn = $('#settingsBtn');
 const settingsModal = $('#settingsModal');
 const closeSettingsBtn = $('#closeSettingsBtn');
-const inviteLinkContainer = $('#invite-link-container');
-const inviteLinkDisplay = $('#inviteLinkDisplay');
 const copyInviteLinkBtn = $('#copyInviteLinkBtn');
 const roomTimerContainer = $('#room-timer-container');
 const roomTimer = $('#room-timer');
@@ -69,11 +73,17 @@ const leaveRoomBtn = $('#leaveRoomBtn');
 const roomIdInput = $('#roomIdInput');
 const roomPasswordInput = $('#roomPasswordInput');
 const roomPasswordDisplay = $('#roomPasswordDisplay');
-const roomJoinUi = $('#room-join-ui');
 const roomInfoUi = $('#room-info-ui');
 const roomIdDisplay = $('#roomIdDisplay');
 const hostBadge = $('#host-badge');
-const playerNameInput = $('#playerNameInput');
+const playerSettingsBtn = $('#playerSettingsBtn');
+const playerSettingsModal = $('#playerSettingsModal');
+const closePlayerSettingsBtn = $('#closePlayerSettingsBtn');
+const settingsPlayerNameInput = $('#settingsPlayerNameInput');
+const confirmPlayerSettingsBtn = $('#confirmPlayerSettingsBtn');
+const playerShortIdDisplay = $('#playerShortIdDisplay');
+const loaderOverlay = $('#loader-overlay');
+const loaderText = $('#loader-text');
 const playerListContainer = $('#player-list-container');
 const playerListEl = $('#player-list');
 const playerCountDisplay = $('#playerCountDisplay');
@@ -81,6 +91,17 @@ const chatContainer = $('#chat-container');
 const chatMessagesEl = $('#chat-messages');
 const chatInput = $('#chatInput');
 const chatSendBtn = $('#chatSendBtn');
+const voiceInputBtn = $('#voiceInputBtn');
+const preventSleepToggle = $('#preventSleep');
+// Friend Modal
+const friendsModal = $('#friendsModal');
+const closeFriendsModalBtn = $('#closeFriendsModalBtn');
+const friendsBtn = $('#friendsBtn');
+const friendSearchInput = $('#friendSearchInput');
+const friendSearchBtn = $('#friendSearchBtn');
+const friendSearchResultEl = $('#friendSearchResult');
+const friendRequestsListEl = $('#friendRequestsList');
+const friendsListEl = $('#friendsList');
 
 // --- アプリケーションロジック ----------------------------------------------
 
@@ -102,6 +123,230 @@ async function getIPAddress() {
     console.error("Could not get IP address:", error);
     return null;
   }
+}
+
+/**
+ * Escapes HTML to prevent XSS attacks.
+ * @param {string} str The string to escape.
+ * @returns {string} The escaped string.
+ */
+function escapeHTML(str) {
+  if (typeof str !== 'string') return '';
+  const p = document.createElement('p');
+  p.textContent = str;
+  return p.innerHTML;
+}
+
+/**
+ * プレイヤー名を state, localStorage, UI間で同期する
+ * @param {string} newName - 新しいプレイヤー名
+ */
+function syncAndSavePlayerName(newName) {
+  const trimmedName = newName.trim();
+  state.playerName = trimmedName;
+  localStorage.setItem('splaRoulettePlayerName', trimmedName);
+  if (settingsPlayerNameInput.value !== trimmedName) {
+    settingsPlayerNameInput.value = trimmedName;
+  }
+}
+
+/**
+ * UUID v4を生成する
+ * @returns {string}
+ */
+function generateUUID() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+/**
+ * localStorageから永続的なユーザーIDを取得または生成する
+ * @returns {string}
+ */
+function getPersistentUserId() {
+  let userId = localStorage.getItem('persistentUserId');
+  if (!userId) {
+    userId = generateUUID();
+    localStorage.setItem('persistentUserId', userId);
+  }
+  return userId;
+}
+
+/**
+ * ユーザーのshortIdを取得または新規生成する
+ * @param {string} persistentUserId
+ * @param {string} playerName
+ * @returns {Promise<string>} ユーザーのshortId
+ */
+async function getOrCreateUserShortId(persistentUserId, playerName) {
+  const userRef = firebase.database().ref(`users/${persistentUserId}`);
+  const userSnapshot = await userRef.once('value');
+  const userData = userSnapshot.val();
+
+  // ユーザーデータがあり、名前も同じなら既存のIDを返す
+  if (userData && userData.shortId && userData.name === playerName) {
+    return userData.shortId;
+  }
+
+  // 名前が違う、または初めての場合、IDを再生成する
+  // もし古いIDが存在すれば、まずそれを解放する
+  if (userData && userData.shortId) {
+    const oldShortId = userData.shortId;
+    // shortIdMapから古いIDを削除。失敗しても処理は続行する。
+    await firebase.database().ref(`shortIdMap/${oldShortId}`).remove().catch(e => console.warn("Could not remove old shortId from map:", e));
+  }
+
+  // 新しいIDを生成するロジック
+  const shortIdMapRef = firebase.database().ref('shortIdMap');
+  let newShortId;
+  let attempts = 0;
+  const MAX_ATTEMPTS = 100;
+
+  while (attempts < MAX_ATTEMPTS) {
+    newShortId = Math.floor(10000 + Math.random() * 90000).toString();
+    const { committed } = await shortIdMapRef.child(newShortId).transaction(currentData => (currentData === null ? persistentUserId : undefined));
+    if (committed) {
+      // ユーザー情報を新しい名前とIDで上書き（または新規作成）
+      await userRef.set({ name: playerName, shortId: newShortId, createdAt: firebase.database.ServerValue.TIMESTAMP });
+      return newShortId;
+    }
+    attempts++;
+  }
+  throw new Error(`Failed to generate a unique shortId after ${MAX_ATTEMPTS} attempts.`);
+}
+
+/**
+ * ローディングオーバーレイを表示する
+ * @param {string} text 表示するテキスト
+ */
+function showLoader(text = '') {
+  if (!loaderOverlay) return;
+  if (loaderText) {
+    loaderText.textContent = text;
+  }
+  loaderOverlay.classList.add('visible');
+}
+
+/**
+ * ローディングオーバーレイを非表示にする
+ */
+function hideLoader() {
+  if (!loaderOverlay) return;
+  loaderOverlay.classList.remove('visible');
+}
+
+/**
+ * サーバーエラーをコンソールに出力し、トーストでユーザーに通知する
+ * @param {string} message ユーザーに表示するメッセージ
+ * @param {Error} error キャッチしたエラーオブジェクト
+ */
+function showServerError(message, error) {
+  console.error(message, error);
+  const displayMessage = error && error.message ? `${message} (${error.message})` : message;
+  if (typeof showToast === 'function') {
+    showToast(displayMessage, 'error', 8000);
+  }
+}
+
+/**
+ * プレイヤー名とIDを更新し、UIに反映する
+ */
+async function updatePlayerNameAndId() {
+  const newName = settingsPlayerNameInput.value.trim();
+  if (!newName) {
+    showToast(t('player-name-required'), 'error');
+    return;
+  }
+
+  showLoader(t('player-settings-updating'));
+  try {
+    syncAndSavePlayerName(newName);
+    const persistentUserId = getPersistentUserId();
+    const shortId = await getOrCreateUserShortId(persistentUserId, newName);
+    playerShortIdDisplay.textContent = `#${shortId}`;
+    showToast(t('player-settings-updated'), 'success');
+    playerSettingsModal.style.display = 'none';
+    // プレイヤー情報が確定したので、フレンド関連のリスナーを開始
+    listenToFriends();
+    listenToFriendRequests();
+    listenToInvitations();
+  } catch (error) {
+    showServerError(t('player-settings-update-failed'), error);
+  } finally {
+    hideLoader();
+  }
+}
+
+/**
+ * トースト通知を表示する。
+ * @param {string} message - 表示するメッセージ
+ * @param {string} [type='info'] - トーストの種類 ('success', 'error', 'info')
+ * @param {number} [duration=3000] - 表示時間 (ミリ秒)
+ * @param {Array<Object>} [actions=[]] - ボタンのアクション定義
+ */
+function showToast(message, type = 'info', duration = 3000, actions = []) {
+  const toastContainer = document.getElementById('toast-container');
+  if (!toastContainer) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+
+  const messageEl = document.createElement('div');
+  messageEl.className = 'toast-message';
+  messageEl.textContent = message;
+  toast.appendChild(messageEl);
+
+  if (actions.length > 0) {
+    const actionsContainer = document.createElement('div');
+    actionsContainer.className = 'toast-actions';
+    actions.forEach(action => {
+      const button = document.createElement('button');
+      button.className = `btn ${action.className || 'secondary'}`;
+      button.textContent = action.text;
+      button.style.padding = '4px 10px';
+      button.style.fontSize = '13px';
+      button.onclick = () => {
+        action.callback();
+        toast.classList.remove('show');
+        toast.addEventListener('transitionend', () => toast.remove());
+      };
+      actionsContainer.appendChild(button);
+    });
+    toast.appendChild(actionsContainer);
+  }
+
+  // プログレスバーを追加
+  const progressBar = document.createElement('div');
+  progressBar.className = 'toast-progress-bar';
+  progressBar.style.animationDuration = `${duration}ms`; // トーストの表示時間と同期
+  toast.appendChild(progressBar);
+
+  toastContainer.appendChild(toast);
+
+  // 少し遅らせて 'show' クラスを追加し、CSSトランジションを発火させる
+  setTimeout(() => {
+    toast.classList.add('show');
+  }, 10);
+
+  // 指定時間後に 'show' クラスを削除し、フェードアウトさせる
+  setTimeout(() => {
+    toast.classList.remove('show');
+    // トランジション完了後に要素をDOMから削除
+    toast.addEventListener('transitionend', () => toast.remove());
+  }, duration);
+}
+
+/**
+ * サーバー関連のエラーを整形してユーザーに表示する
+ * @param {string} userMessage - ユーザーに表示するメッセージ (翻訳済み)
+ * @param {Error} error - 発生したエラーオブジェクト
+ */
+function showServerError(userMessage, error) {
+  console.error(`${userMessage}:`, error); // 開発者向けにコンソールに詳細なエラーを出力
+  const errorCode = error.code ? ` (Code: ${error.code})` : '';
+  showToast(`${userMessage}${errorCode}`, 'error', 6000); // エラーは少し長めに表示
 }
 
 function getActivePool() {
@@ -235,23 +480,22 @@ function pickRandom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+const getInteractiveControls = () => [
+  ...$$('.main-controls button:not(#fullscreenBtn), .main-controls input, #history button'),
+  ...$$('#classFilters input, #classFilters button')
+];
+
 function setControlsDisabled(disabled) {
-  // 全画面ボタンはルーレット実行中も操作可能にするため、無効化の対象から除外する
-  // When disabling, disable everything.
   if (disabled) {
-    $$('.main-controls button:not(#fullscreenBtn), .main-controls input, #history button').forEach(c => c.disabled = true);
-    $$('#classFilters input, #classFilters button').forEach(c => c.disabled = true);
+    getInteractiveControls().forEach(c => c.disabled = true);
     return;
   }
 
-  // When enabling, restore state based on role.
+  // 有効化する際は、まず全てのコントロールを有効に戻す
+  getInteractiveControls().forEach(c => c.disabled = false);
+  // その後、ルーム内にいる場合は、役割に応じて再度制限をかける
   if (state.roomRef) {
-    // In a room, restore state based on host/viewer role
     setRealtimeUiState(state.isHost ? 'in_room_host' : 'in_room_viewer');
-  } else {
-    // In local mode, enable all controls
-    $$('.main-controls button:not(#fullscreenBtn), .main-controls input, #history button').forEach(c => c.disabled = false);
-    $$('#classFilters input, #classFilters button').forEach(c => c.disabled = false);
   }
 }
 
@@ -312,28 +556,55 @@ function runSingleAnimation(pool, finalPickOverride = null) {
 function getDrawResults() {
   const playerCount = parseInt(playerCountInput.value, 10);
   if (noRepeat.checked && state.pool.length < playerCount) {
-    alert(t('no-candidates-alert', { poolCount: state.pool.length, playerCount: playerCount }));
+    showToast(t('no-candidates-alert', { poolCount: state.pool.length, playerCount: playerCount }), 'error');
     return null;
   }
   if (state.pool.length === 0) {
-    alert(t('no-candidates-alert-title'));
+    showToast(t('no-candidates-alert-title'), 'error');
     return null;
   }
 
-  const finalResults = [];
-  const tempPool = [...state.pool];
-  for (let i = 0; i < playerCount; i++) {
-    if (tempPool.length === 0) break;
-    const result = pickRandom(tempPool);
-    if (result) {
-      finalResults.push(result);
-      if (noRepeat.checked) {
-        const index = tempPool.findIndex(item => item.name === result.name);
-        if (index > -1) tempPool.splice(index, 1);
-      }
+const finalResults = [];
+const tempPool = [...state.pool];
+for (let i = 0; i < playerCount; i++) {
+  if (tempPool.length === 0) break;
+  const result = pickRandom(tempPool);
+  if (result) {
+    finalResults.push(result);
+    if (noRepeat.checked) {
+      const index = tempPool.findIndex(item => item.name === result.name);
+      if (index > -1) tempPool.splice(index, 1);
     }
   }
-  return finalResults;
+}
+return finalResults;
+}
+
+/**
+ * 抽選結果を永続化する（履歴への保存とDiscord通知）
+ * @param {Array<Object>} finalResults - 抽選結果の配列
+ * @param {string} drawTime - 抽選時刻のISO文字列
+ */
+async function persistResults(finalResults, drawTime) {
+    const isOnline = !!state.roomRef;
+    if (isOnline) {
+        if (state.isHost) {
+            const historyRef = state.roomRef.child('history');
+            const updates = {};
+            finalResults.forEach((result, i) => {
+                const newKey = historyRef.push().key;
+                updates[newKey] = { ...result, time: drawTime, playerNum: i + 1, totalPlayers: finalResults.length };
+            });
+            await historyRef.update(updates);
+            await sendToDiscord(finalResults);
+        }
+    } else {
+        finalResults.forEach((result, i) => {
+            pushHistoryItem(result, drawTime, i + 1, finalResults.length);
+        });
+        saveHistory();
+        await sendToDiscord(finalResults);
+    }
 }
 
 /**
@@ -377,29 +648,7 @@ async function displaySpinResult(finalResults, pool) {
 
   if (finalResults.length > 0) {
       const drawTime = new Date().toISOString();
-      if (isOnline) {
-          // Online mode: only host writes history and sends notifications
-          if (state.isHost) {
-              const historyRef = state.roomRef.child('history');
-              for (let i = 0; i < finalResults.length; i++) {
-                  const result = finalResults[i];
-                  historyRef.push({
-                      ...result,
-                      time: drawTime,
-                      playerNum: i + 1,
-                      totalPlayers: finalResults.length,
-                  });
-              }
-              await sendToDiscord(finalResults);
-          }
-      } else {
-          // Local mode: update local history and save
-          for (let i = 0; i < finalResults.length; i++) {
-              pushHistoryItem(finalResults[i], drawTime, i + 1, finalResults.length);
-          }
-          saveHistory();
-          await sendToDiscord(finalResults);
-      }
+      await persistResults(finalResults, drawTime);
 
       if ($('#autoCopy')?.checked) {
           await copyResultToClipboard(finalResults);
@@ -536,11 +785,10 @@ async function copyResultToClipboard(results) {
 
   try {
     await navigator.clipboard.writeText(textToCopy);
-    console.log('Result copied to clipboard.');
-    // TODO: 将来的に「コピーしました」というトースト通知などを追加するとより親切
+    showToast(t('results-copied-to-clipboard'), 'success');
   } catch (err) {
     console.error('Failed to copy result to clipboard:', err);
-    alert(t('error-copy-failed'));
+    showToast(t('copy-failed'), 'error');
   }
 }
 
@@ -628,12 +876,13 @@ async function sendToDiscord(results) {
     });
 
     if (!response.ok) {
-      console.error('Discord Webhookへの送信に失敗しました:', response.status, await response.text());
-      alert(t('webhook-send-error'));
+      const errorText = await response.text();
+      console.error('Discord Webhookへの送信に失敗しました:', response.status, errorText);
+      showToast(`${t('webhook-send-error')} (Status: ${response.status})`, 'error', 5000);
     }
   } catch (error) {
     console.error('Discord Webhookへの送信中にエラーが発生しました:', error);
-    alert(t('webhook-send-error'));
+    showToast(t('webhook-send-error'), 'error', 5000);
   }
 }
 
@@ -693,7 +942,7 @@ function renderProbTable() {
 function toggleFullscreen() {
   if (!document.fullscreenElement) {
     document.documentElement.requestFullscreen().catch(err => {
-      alert(`全画面表示にできませんでした: ${err.message} (${err.name})`);
+      showToast(`${t('fullscreen-error')}: ${err.message}`, 'error');
     });
   } else {
     if (document.exitFullscreen) {
@@ -715,6 +964,40 @@ function updateFullscreenButton() {
   }
 }
 
+// --- Wake Lock 機能 ----------------------------------------------------
+let wakeLockSentinel = null;
+
+const requestWakeLock = async () => {
+  if ('wakeLock' in navigator) {
+    try {
+      wakeLockSentinel = await navigator.wakeLock.request('screen');
+      wakeLockSentinel.addEventListener('release', () => {
+        // センチネルがシステムによって解放された場合
+        console.log('Screen Wake Lock was released');
+        wakeLockSentinel = null;
+      });
+      console.log('Screen Wake Lock is active');
+      showToast(t('wake-lock-acquired'), 'success');
+    } catch (err) {
+      console.error(`${err.name}, ${err.message}`);
+      showToast(t('wake-lock-failed'), 'error');
+    }
+  }
+};
+
+const releaseWakeLock = async () => {
+  if (wakeLockSentinel !== null) {
+    await wakeLockSentinel.release();
+    wakeLockSentinel = null;
+  }
+};
+
+const handleVisibilityChange = async () => {
+  if (preventSleepToggle.checked && wakeLockSentinel === null && document.visibilityState === 'visible') {
+    await requestWakeLock();
+  }
+};
+
 // --- 設定と履歴の保存・復元 ----------------------------------------------
 
 function saveSettings() {
@@ -732,6 +1015,7 @@ function saveSettings() {
       webhookTemplate: $('#webhookTemplate')?.value ?? '',
       webhookMentions: $('#webhookMentions')?.value ?? '',
       autoCopy: $('#autoCopy')?.checked ?? false,
+      preventSleep: preventSleepToggle.checked,
     };
     localStorage.setItem('splaRouletteSettings', JSON.stringify(settings));
   } catch (e) {
@@ -770,6 +1054,12 @@ function loadAndApplySettings() {
     const autoCopy = $('#autoCopy');
     if (autoCopy) {
       autoCopy.checked = settings.autoCopy ?? false;
+    }
+    if ('preventSleep' in settings && 'wakeLock' in navigator) {
+      preventSleepToggle.checked = settings.preventSleep;
+      if (preventSleepToggle.checked) {
+        requestWakeLock();
+      }
     }
     toggleWebhookUrlState(); // Webhook設定のUI状態を更新
   } catch (e) {
@@ -838,6 +1128,10 @@ function setLanguage(lang) {
   state.lang = lang;
   document.documentElement.lang = lang;
   const radio = $(`input[name="language"][value="${lang}"]`);
+  // 音声認識の言語設定も更新
+  if (state.recognition) {
+    state.recognition.lang = lang;
+  }
   if (radio) radio.checked = true;
   updateUIText();
   saveSettings();
@@ -895,7 +1189,7 @@ async function testDiscordWebhook() {
   const mentionContent = mentionIds.length > 0 ? mentionIds.map(id => `<@${id}>`).join(' ') : '';
 
   if (!url) {
-    alert(t('settings-webhook-test-no-url'));
+    showToast(t('settings-webhook-test-no-url'), 'error');
     return;
   }
 
@@ -904,8 +1198,8 @@ async function testDiscordWebhook() {
   testBtn.textContent = t('settings-webhook-test-sending');
 
   const embed = {
-    title: '✅ 接続テスト',
-    description: 'このメッセージが表示されれば、Webhookの設定は正常です！',
+    title: `✅ ${t('webhook-test-title')}`,
+    description: t('webhook-test-description'),
     color: 0x4caf50, // Green
     footer: { text: 'Splatoon 3 Weapon Roulette' },
   };
@@ -916,9 +1210,13 @@ async function testDiscordWebhook() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: `${t('webhook-test-content')} ${mentionContent}`, embeds: [embed] }),
     });
-    alert(response.ok ? t('settings-webhook-test-success') : t('settings-webhook-test-fail'));
+    if (response.ok) {
+      showToast(t('settings-webhook-test-success'), 'success');
+    } else {
+      showToast(`${t('settings-webhook-test-fail')} (Status: ${response.status})`, 'error', 5000);
+    }
   } catch (error) {
-    alert(t('settings-webhook-test-fail'));
+    showToast(t('settings-webhook-test-fail'), 'error', 5000);
   } finally {
     testBtn.disabled = false;
     testBtn.textContent = originalText;
@@ -940,6 +1238,15 @@ function addChatMessage({ name, message, isSystem = false, timestamp }) {
   const messageEl = document.createElement('div');
   messageEl.className = 'chat-message';
 
+  // 直前のメッセージと比較して、連続投稿かどうかを判定
+  const lastMessageEl = chatMessagesEl.lastElementChild;
+  if (lastMessageEl && !isSystem && lastMessageEl.dataset.authorName === name) {
+    messageEl.classList.add('consecutive');
+  }
+
+  // 次の比較のために、送信者名をdata属性に保存
+  messageEl.dataset.authorName = name;
+
   if (isSystem) {
     messageEl.classList.add('system');
     messageEl.textContent = message; // System messages are simple text
@@ -949,10 +1256,16 @@ function addChatMessage({ name, message, isSystem = false, timestamp }) {
       messageEl.classList.add('own');
     }
 
-    // Check for mentions and add highlight class
-    const myName = state.playerName;
-    if (myName && message.includes(`@${myName}`)) {
-      messageEl.classList.add('mention');
+    // メンションをチェックしてハイライトクラスを追加
+    const me = state.players?.find(p => p.id === state.playerRef?.key);
+    if (me) {
+      const myName = me.name;
+      const myShortId = me.shortId;
+      const mentionByName = myName && message.includes(`@${myName}`);
+      const mentionById = myShortId && message.includes(`@#${myShortId}`);
+      if (mentionByName || mentionById) {
+        messageEl.classList.add('mention');
+      }
     }
 
     const contentEl = document.createElement('div');
@@ -997,27 +1310,236 @@ function updatePlayerList(players) {
     return;
   }
   playerListEl.innerHTML = players.map(player => {
-      const isMe = state.playerRef && player.id === state.playerRef.key;
-      const meIndicator = isMe ? ` <span class="my-indicator" title="${t('realtime-you')}">👤</span>` : '';
-      const hostIndicator = player.isHost ? ` <span class="host-icon" title="${t('realtime-host')}">👑</span>` : '';
-      
-      let adminControls = '';
-      if (state.isHost && !player.isHost) {
-          adminControls = `
-            <div class="player-actions">
-                <button class="btn-kick menu" data-action="admin-menu" data-player-id="${player.id}" data-player-name="${player.name}" title="${t('realtime-admin-menu')}">︙</button>
-            </div>
-          `;
-      }
+    const isMe = state.playerRef && player.id === state.playerRef.key;
+    const hostIndicator = player.isHost ? ` <span class="host-icon" title="${t('realtime-host')}">👑</span>` : '';
+    const meIndicator = isMe ? ` <span class="muted">(${t('you')})</span>` : '';
+    const displayId = player.shortId ? `#${player.shortId}` : '#----';
 
-      return `
-      <div class="player-item">
-          <div class="player-name" data-player-name="${player.name}" title="${t('chat-mention-tooltip', { name: player.name })}">
-            <span>${player.name}${meIndicator}${hostIndicator}</span>
+    let adminControls = '';
+    if (state.isHost && !player.isHost) {
+        adminControls = `
+          <div class="player-actions">
+              <button class="btn-kick menu" data-action="admin-menu" data-player-id="${player.id}" data-player-name="${player.name}" title="${t('realtime-admin-menu')}">︙</button>
           </div>
-          ${adminControls}
+        `;
+    }
+
+    return `
+    <div class="player-item">
+        <div class="player-name" data-player-name="${player.name}" title="${t('chat-mention-tooltip', { name: player.name })}">
+          <span class="player-id-display">${displayId}</span>
+          <span>${escapeHTML(player.name)}${hostIndicator}</span>
+          ${meIndicator}
+        </div>
+        ${adminControls}
+    </div>
+    `;
+  }).join('');
+}
+
+/**
+ * プレイヤーID(#なし)でユーザーを検索する
+ * @param {string} shortId
+ * @returns {Promise<object|null>}
+ */
+async function findUserByShortId(shortId) {
+  if (!shortId || !/^\d{5}$/.test(shortId)) return null;
+
+  const shortIdMapRef = firebase.database().ref(`shortIdMap/${shortId}`);
+  const mapSnapshot = await shortIdMapRef.once('value');
+  if (!mapSnapshot.exists()) return null;
+
+  const persistentUserId = mapSnapshot.val();
+  const userRef = firebase.database().ref(`users/${persistentUserId}`);
+  const userSnapshot = await userRef.once('value');
+  if (!userSnapshot.exists()) return null;
+
+  return { id: persistentUserId, ...userSnapshot.val() };
+}
+
+/**
+ * 検索結果を表示する
+ * @param {object|null} user
+ */
+function renderFriendSearchResult(user) {
+  if (!user) {
+    friendSearchResultEl.innerHTML = `<div class="empty">${t('friends-user-not-found')}</div>`;
+    return;
+  }
+
+  const myId = getPersistentUserId();
+  const isMe = user.id === myId;
+  const isAlreadyFriend = state.friends.some(f => f.id === user.id);
+  // TODO: Check for pending requests
+
+  let actionButton = '';
+  if (!isMe && !isAlreadyFriend) {
+    actionButton = `<button class="btn secondary" data-action="send-friend-request" data-id="${user.id}" style="padding: 4px 10px;">${t('friends-send-request')}</button>`;
+  }
+
+  friendSearchResultEl.innerHTML = `
+    <div class="player-item">
+      <div class="player-name">
+        <span class="player-id-display">#${user.shortId}</span>
+        <span>${escapeHTML(user.name)}</span>
       </div>
-  `}).join('');
+      <div class="player-actions">
+        ${actionButton}
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * フレンド申請を送信する
+ * @param {string} targetUserId
+ */
+async function sendFriendRequest(targetUserId) {
+  const myId = getPersistentUserId();
+  if (myId === targetUserId) {
+    showToast(t('friends-request-self'), 'error');
+    return;
+  }
+
+  // Check if already friends or request pending
+  const friendRef = firebase.database().ref(`users/${myId}/friends/${targetUserId}`);
+  const friendSnap = await friendRef.once('value');
+  if (friendSnap.exists()) {
+      showToast(t('friends-request-already-sent'), 'info');
+      return;
+  }
+  // This check is simplified. A more robust check would look at sent requests too.
+
+  const requestData = {
+    senderId: myId,
+    senderName: state.playerName,
+    senderShortId: playerShortIdDisplay.textContent.replace('#', ''),
+    timestamp: firebase.database.ServerValue.TIMESTAMP,
+  };
+
+  const updates = {};
+  updates[`/friendRequests/${targetUserId}/${myId}`] = requestData;
+
+  try {
+    await firebase.database().ref().update(updates);
+    showToast(t('friends-request-sent'), 'success');
+    friendSearchResultEl.innerHTML = ''; // Clear search result
+  } catch (error) {
+    showServerError(t('error-failed-to-send-request'), error);
+  }
+}
+
+/**
+ * フレンド申請を承認する
+ * @param {string} senderId
+ */
+async function acceptFriendRequest(senderId) {
+  const myId = getPersistentUserId();
+  const updates = {};
+  updates[`/users/${myId}/friends/${senderId}`] = true;
+  updates[`/users/${senderId}/friends/${myId}`] = true;
+  updates[`/friendRequests/${myId}/${senderId}`] = null; // Remove request
+
+  try {
+    await firebase.database().ref().update(updates);
+    const sender = state.friendRequests.find(req => req.senderId === senderId);
+    if (sender) {
+      showToast(t('friends-add-success', { name: sender.senderName }), 'success');
+    }
+  } catch (error) {
+    showServerError(t('friends-add-fail'), error);
+  }
+}
+
+/**
+ * フレンド申請を拒否する
+ * @param {string} senderId
+ */
+async function rejectFriendRequest(senderId) {
+  const myId = getPersistentUserId();
+  try {
+    await firebase.database().ref(`friendRequests/${myId}/${senderId}`).remove();
+  } catch (error) {
+    showServerError(t('error'), error);
+  }
+}
+
+/**
+ * フレンドを削除する
+ * @param {string} friendId
+ */
+async function removeFriend(friendId, friendName) {
+  if (!confirm(t('friends-remove-confirm', { name: friendName }))) return;
+
+  const myId = getPersistentUserId();
+  const updates = {};
+  updates[`/users/${myId}/friends/${friendId}`] = null;
+  updates[`/users/${friendId}/friends/${myId}`] = null;
+
+  try {
+    await firebase.database().ref().update(updates);
+    showToast(t('friends-remove-success', { name: friendName }), 'success');
+  } catch (error) {
+    showServerError(t('friends-remove-fail'), error);
+  }
+}
+
+/**
+ * フレンド申請リストを描画する
+ */
+function renderFriendRequests() {
+  if (state.friendRequests.length === 0) {
+    friendRequestsListEl.innerHTML = `<div class="empty" data-i18n-key="friends-requests-empty">${t('friends-requests-empty')}</div>`;
+    return;
+  }
+  friendRequestsListEl.innerHTML = state.friendRequests.map(req => `
+    <div class="player-item">
+      <div class="player-name">
+        <span class="player-id-display">#${req.senderShortId}</span>
+        <span>${escapeHTML(req.senderName)}</span>
+      </div>
+      <div class="player-actions">
+        <button class="btn secondary" data-action="accept-friend" data-id="${req.senderId}" style="padding: 2px 8px; font-size: 12px;">${t('friends-accept')}</button>
+        <button class="btn danger" data-action="reject-friend" data-id="${req.senderId}" style="padding: 2px 8px; font-size: 12px;">${t('friends-reject')}</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+/**
+ * フレンドリストを描画する
+ */
+function renderFriendsList() {
+  if (state.friends.length === 0) {
+    friendsListEl.innerHTML = `<div class="empty" data-i18n-key="friends-list-empty">${t('friends-list-empty')}</div>`;
+    return;
+  }
+  const inRoom = !!state.roomId;
+  const playerIdsInRoom = state.players.map(p => p.id);
+
+  friendsListEl.innerHTML = state.friends.map(friend => {
+    let actionButton = '';
+    if (inRoom && state.isHost) { // ホストのみが招待可能
+      if (playerIdsInRoom.includes(friend.id)) {
+        actionButton = `<button class="btn secondary" disabled style="padding: 2px 8px; font-size: 12px;">${t('friends-already-in-room')}</button>`;
+      } else {
+        actionButton = `<button class="btn secondary" data-action="invite-friend" data-id="${friend.id}" data-name="${escapeHTML(friend.name)}" style="padding: 2px 8px; font-size: 12px;">${t('friends-invite-to-room')}</button>`;
+      }
+    }
+
+    return `
+    <div class="player-item">
+      <div class="player-name">
+        <span class="player-id-display">#${friend.shortId}</span>
+        <span>${escapeHTML(friend.name)}</span>
+      </div>
+      <div class="player-actions">
+        ${actionButton}
+        <button class="btn danger" data-action="remove-friend" data-id="${friend.id}" data-name="${escapeHTML(friend.name)}" style="padding: 2px 8px; font-size: 12px;">${t('friends-remove')}</button>
+      </div>
+    </div>
+    `;
+  }).join('');
 }
 
 /**
@@ -1065,15 +1587,41 @@ function applyFiltersFromFirebase(filters) {
   updatePool();
 }
 
+/**
+ * フレンドを現在のルームに招待する
+ * @param {string} targetUserId
+ * @param {string} targetUserName
+ */
+async function inviteFriendToRoom(targetUserId, targetUserName) {
+  if (!state.roomId || !state.roomPassword) {
+    showToast(t('friends-not-in-room'), 'error');
+    return;
+  }
+  const myId = getPersistentUserId();
+  const invitationData = {
+    inviterId: myId,
+    inviterName: state.playerName,
+    roomId: state.roomId,
+    roomPassword: state.roomPassword,
+    timestamp: firebase.database.ServerValue.TIMESTAMP,
+  };
+  try {
+    await firebase.database().ref(`invitations/${targetUserId}`).push(invitationData);
+    showToast(t('friends-invite-sent', { name: targetUserName }), 'success');
+  } catch (error) {
+    showServerError(t('friends-invite-fail'), error);
+  }
+}
+
 // --- リアルタイム連携 (Firebase) ------------------------------------
 
 function initFirebase() {
   try {
     if (!firebaseConfig.apiKey || firebaseConfig.apiKey === "YOUR_API_KEY") {
-    console.warn("Firebase is not configured. Real-time features will be disabled.");
-    setRealtimeUiState('error');
-    return;
-  }
+      showToast(t('firebase-not-configured'), 'error', 10000);
+      setRealtimeUiState('error');
+      return;
+    }
     // Prevent re-initialization
     if (!firebase.apps.length) {
       firebase.initializeApp(firebaseConfig);
@@ -1102,13 +1650,15 @@ function initFirebase() {
           joinRoomBtn.click();
         } else {
           // プレイヤー名が未入力の場合は、入力を促す
-          showToast(t('realtime-autojoin-name-required'));
+          showToast(t('realtime-autojoin-name-required'), 'info');
           playerNameInput.focus();
         }
       }, 500); // 500msの遅延
     }
   } catch (error) {
     console.error("Firebase initialization failed:", error);
+    const userMessage = t('firebase-init-failed');
+    showServerError(userMessage, error);
     setRealtimeUiState('error');
   }
 }
@@ -1121,7 +1671,7 @@ function showAdminMenu(targetButton) {
   menu.className = 'admin-menu';
   menu.id = 'active-admin-menu';
   // Store which button opened this menu to handle toggling
-  menu.dataset.openerPlayerId = playerId; 
+  menu.dataset.openerPlayerId = playerId;
 
   menu.innerHTML = `
     <button class="admin-menu-item" data-action="kick" data-player-id="${playerId}" data-player-name="${playerName}">${t('realtime-kick-player')}</button>
@@ -1184,71 +1734,68 @@ function banPlayer(playerId, playerName) {
 }
 
 async function createRoom() { // UIの状態を更新して、処理中であることをユーザーにフィードバック
-  if (!state.db) {
-    alert("データベースに接続できません。ページをリロードして再度お試しください。");
-    console.error("Firebase Database is not initialized. state.db is null.");
-    return;
-  }
-
   createRoomBtn.disabled = true;
   joinRoomBtn.disabled = true;
   createRoomBtn.textContent = t('realtime-creating-btn');
+  const name = state.playerName;
 
-  const reEnableButtons = () => {
-    createRoomBtn.disabled = false;
-    joinRoomBtn.disabled = false;
-    createRoomBtn.textContent = t('realtime-create-btn');
-    joinRoomBtn.textContent = t('realtime-join-btn');
-  };
-
-  const name = playerNameInput.value.trim();
-  if (!name) {
-    alert(t('player-name-required'));
-    reEnableButtons();
-    return;
-  }
-  state.playerName = name;
-
-  const ip = await getIPAddress();
   try {
+    if (!state.db) { showToast(t('db-not-connected-error'), 'error', 5000); return; }
+    if (!name) {
+      showToast(t('player-name-required'), 'error');
+      // プレイヤー名が未設定の場合、設定モーダルを開いて入力を促す
+      playerSettingsModal.style.display = 'flex';
+      settingsPlayerNameInput.focus();
+      createRoomBtn.disabled = false;
+      joinRoomBtn.disabled = false;
+      createRoomBtn.textContent = t('realtime-create-btn');
+      return;
+    }
+    const persistentUserId = getPersistentUserId();
+
+    const ip = await getIPAddress();
     const roomsRef = state.db.ref('rooms');
     let newRoomId;
     let roomExists = true;
-
     // 衝突しない12桁の数字のIDを生成する
     while (roomExists) {
       newRoomId = Math.floor(100000000000 + Math.random() * 900000000000).toString();
       const snapshot = await roomsRef.child(newRoomId).once('value');
       roomExists = snapshot.exists();
     }
-
     // 4桁の数字パスワードを生成
     const password = Math.floor(1000 + Math.random() * 9000).toString();
-
     state.roomId = newRoomId;
     state.roomRef = roomsRef.child(state.roomId);
+
+    const playerShortId = await getOrCreateUserShortId(persistentUserId, name);
+
     await state.roomRef.set({
       createdAt: firebase.database.ServerValue.TIMESTAMP,
       lastActivity: firebase.database.ServerValue.TIMESTAMP,
-      lastSpin: null,
       password: password,
+      hostId: persistentUserId,
     });
-
-    state.playerRef = state.roomRef.child('clients').push({
+    state.playerRef = state.roomRef.child('clients').child(persistentUserId);
+    await state.playerRef.set({
       name: state.playerName,
+      shortId: playerShortId,
       joinedAt: firebase.database.ServerValue.TIMESTAMP,
       ip: ip
     });
+    // ホストが切断した場合は、自分のプレイヤー情報のみを削除する
     state.playerRef.onDisconnect().remove();
-
     listenToRoomChanges();
+    $('#realtimeModal').style.display = 'none';
     // ルーム作成時に現在のフィルター状態を書き込む
     updateFiltersOnFirebase();
   } catch (error) {
     console.error("Error creating room:", error);
-    const detail = error.code ? `(${error.code})` : `(${error.message})`;
-    alert(`${t('realtime-error-create')} ${detail}`);
-    reEnableButtons();
+    showServerError(t('realtime-error-create'), error);
+  } finally {
+    createRoomBtn.disabled = false;
+    joinRoomBtn.disabled = false;
+    createRoomBtn.textContent = t('realtime-create-btn');
   }
 }
 
@@ -1256,42 +1803,39 @@ async function joinRoom() {
   createRoomBtn.disabled = true;
   joinRoomBtn.disabled = true;
   joinRoomBtn.textContent = t('realtime-joining-btn');
-
-  const reEnableButtons = () => {
-      createRoomBtn.disabled = false;
-      joinRoomBtn.disabled = false;
-      createRoomBtn.textContent = t('realtime-create-btn');
-      joinRoomBtn.textContent = t('realtime-join-btn');
-  };
-
-  const name = playerNameInput.value.trim();
-  if (!name) {
-    alert(t('player-name-required'));
-    reEnableButtons();
-    return;
-  }
-  const roomId = roomIdInput.value.trim();
-  if (!roomId) {
-    reEnableButtons();
-    return;
-  }
-  const password = roomPasswordInput.value.trim();
-  if (!password) {
-    alert(t('realtime-password-required'));
-    reEnableButtons();
-    return;
-  }
-
-  state.playerName = name;
-  state.roomId = roomId;
-  state.roomRef = state.db.ref(`rooms/${state.roomId}`);
-  const ip = await getIPAddress();
+  const name = state.playerName;
 
   try {
+    if (!state.db) { showToast(t('db-not-connected-error'), 'error', 5000); return; }
+    if (!name) {
+      showToast(t('player-name-required'), 'error');
+      // プレイヤー名が未設定の場合、設定モーダルを開いて入力を促す
+      playerSettingsModal.style.display = 'flex';
+      settingsPlayerNameInput.focus();
+      createRoomBtn.disabled = false;
+      joinRoomBtn.disabled = false;
+      joinRoomBtn.textContent = t('realtime-join-btn');
+      return;
+    }
+    const roomId = roomIdInput.value.trim();
+    if (!roomId) {
+      showToast(t('realtime-error-join-no-id'), 'error');
+      return;
+    }
+    const password = roomPasswordInput.value.trim();
+    if (!password) {
+      showToast(t('realtime-password-required'), 'error');
+      return;
+    }
+
+    state.roomId = roomId;
+    state.roomRef = state.db.ref(`rooms/${state.roomId}`);
+    const persistentUserId = getPersistentUserId();
+    const ip = await getIPAddress();
+
     const snapshot = await state.roomRef.once('value');
     if (!snapshot.exists()) {
-      alert(t('realtime-error-connect'));
-      reEnableButtons();
+      showToast(t('realtime-error-connect'), 'error');
       return;
     }
 
@@ -1299,14 +1843,12 @@ async function joinRoom() {
 
     // Check password
     if (roomData.password !== password) {
-      alert(t('realtime-error-password'));
-      reEnableButtons();
+      showToast(t('realtime-error-password'), 'error');
       return;
     }
     // Check for room expiration
     if (roomData.lastActivity && (Date.now() - roomData.lastActivity > ROOM_EXPIRATION_MS)) {
-        alert(t('realtime-error-expired'));
-        reEnableButtons();
+        showToast(t('realtime-error-expired'), 'error');
         // Optionally, we could delete the room here, but it requires different permissions.
         // For now, just prevent joining.
         return;
@@ -1316,8 +1858,7 @@ async function joinRoom() {
     const bannedIPsSnapshot = await state.roomRef.child('bannedIPs').once('value');
     const bannedIPs = Object.values(bannedIPsSnapshot.val() || {});
     if (ip && bannedIPs.includes(ip)) {
-        alert(t('realtime-error-banned-ip'));
-        reEnableButtons();
+        showToast(t('realtime-error-banned-ip'), 'error', 6000);
         return;
     }
 
@@ -1325,8 +1866,7 @@ async function joinRoom() {
     const blockedNamesSnapshot = await state.roomRef.child('blockedNames').once('value');
     const blockedNames = Object.values(blockedNamesSnapshot.val() || {});
     if (blockedNames.includes(name)) {
-        alert(t('realtime-error-blocked'));
-        reEnableButtons();
+        showToast(t('realtime-error-blocked'), 'error', 6000);
         return;
     }
 
@@ -1335,24 +1875,30 @@ async function joinRoom() {
     const clientCount = Object.keys(clients).length;
     if (clientCount >= 10) {
       // このメッセージは i18n.js に追加する必要があります。
-      alert(t('realtime-error-full'));
-      reEnableButtons();
+      showToast(t('realtime-error-full'), 'error');
       return;
     }
 
-    state.playerRef = state.roomRef.child('clients').push({
+    const playerShortId = await getOrCreateUserShortId(persistentUserId, name);
+
+    state.playerRef = state.roomRef.child('clients').child(persistentUserId);
+    await state.playerRef.set({
       name: state.playerName,
+      shortId: playerShortId,
       joinedAt: firebase.database.ServerValue.TIMESTAMP,
       ip: ip
     });
     state.playerRef.onDisconnect().remove();
 
     listenToRoomChanges();
+    $('#realtimeModal').style.display = 'none';
   } catch (error) {
     console.error("Error joining room:", error);
-    const detail = error.code ? `(${error.code})` : `(${error.message})`;
-    alert(`${t('realtime-error-join')} ${detail}`);
-    reEnableButtons();
+    showServerError(t('realtime-error-join'), error);
+  } finally {
+    createRoomBtn.disabled = false;
+    joinRoomBtn.disabled = false;
+    joinRoomBtn.textContent = t('realtime-join-btn');
   }
 }
 
@@ -1415,7 +1961,7 @@ function listenToRoomChanges() {
       }
 
       // ユーザーに通知
-      alert(message);
+      showToast(message, 'error', 8000);
 
       // UIをリセットし、ルームから退出した状態にする
       handleLeaveRoom(false);
@@ -1424,58 +1970,54 @@ function listenToRoomChanges() {
   let previousPlayers = {};
   let isInitialLoad = true;
 
-  // 参加者リストの変更をリッスン
-  state.roomRef.child('clients').on('value', (snapshot) => {
-    const clients = snapshot.val() || {};
+  // Get hostId once, then listen to client changes.
+  // This assumes host doesn't change.
+  state.roomRef.child('hostId').once('value', (hostSnapshot) => {
+    const hostId = hostSnapshot.val();
 
-    if (!isInitialLoad && state.isHost) {
-      handlePlayerChanges(clients, previousPlayers);
-    }
-    previousPlayers = clients;
-    isInitialLoad = false;
+    // 参加者リストの変更をリッスン
+    state.roomRef.child('clients').on('value', (snapshot) => {
+      const clients = snapshot.val() || {};
 
-    const playerArray = Object.entries(clients)
-      .sort(([, a], [, b]) => a.joinedAt - b.joinedAt)
-      .map(([key, val], index) => ({
-        id: key,
-        name: val.name,
-        isHost: index === 0,
-        ip: val.ip || null
-      }));
-
-    state.players = playerArray;
-    updatePlayerList(playerArray);
-
-    const me = playerArray.find(p => p.id === state.playerRef?.key);
-    if (me) {
-      const wasHost = state.isHost;
-      state.isHost = me.isHost;
-      if (state.isHost && !wasHost && playerArray.length > 1) {
-        state.roomRef.child('chat').push({
-          name: null,
-          message: t('system-new-host', { name: me.name }),
-          isSystem: true,
-          timestamp: firebase.database.ServerValue.TIMESTAMP
-        });
+      if (!isInitialLoad && state.isHost) {
+        handlePlayerChanges(clients, previousPlayers);
       }
-      setRealtimeUiState(state.isHost ? 'in_room_host' : 'in_room_viewer');
+      previousPlayers = clients;
+      isInitialLoad = false;
 
-      // ホストになったらパスワードを取得して、招待リンクを生成するためにUIを更新
-      if (state.isHost) {
-        state.roomRef.child('password').once('value').then(passSnapshot => {
-          if (passSnapshot.exists()) {
-            const password = passSnapshot.val();
-            state.roomPassword = password;
-            roomPasswordDisplay.textContent = password;
-            // パスワードを取得できたので、招待リンクを含むUIを再描画
-            setRealtimeUiState('in_room_host');
-          }
-        });
+      const playerArray = Object.entries(clients)
+        .sort(([, a], [, b]) => a.joinedAt - b.joinedAt)
+        .map(([key, val]) => ({
+          id: key,
+          name: val.name,
+          shortId: val.shortId,
+          isHost: key === hostId,
+          ip: val.ip || null
+        }));
+
+      state.players = playerArray;
+      updatePlayerList(playerArray);
+      renderFriendsList(); // ルームメンバーの変更をフレンドリストに反映
+
+      const me = playerArray.find(p => p.id === state.playerRef?.key);
+      if (me) {
+        state.isHost = me.isHost;
+        setRealtimeUiState(state.isHost ? 'in_room_host' : 'in_room_viewer');
+
+        if (state.isHost) {
+          state.roomRef.child('password').once('value').then(passSnapshot => {
+            if (passSnapshot.exists()) {
+              state.roomPassword = passSnapshot.val();
+              roomPasswordDisplay.textContent = state.roomPassword;
+              setRealtimeUiState('in_room_host');
+            }
+          });
+        }
+      } else {
+        // 自分が見つからない = キックされたか、自ら退出したか、ブロックされた
+        handleLeaveRoom(false); // UIリセットのみ
       }
-    } else {
-      // 自分が見つからない = キックされたか、自ら退出したか、ブロックされた
-      handleLeaveRoom(false); // UIリセットのみ
-    }
+    });
   });
 
   // 抽選結果の変更をリッスン
@@ -1572,12 +2114,13 @@ function handlePlayerChanges(currentPlayers, previousPlayers) {
 
 function setRealtimeUiState(uiState) {
     const spinBtn = $('#spinBtn');
-    roomJoinUi.style.display = (uiState === 'disconnected' || uiState === 'error') ? 'flex' : 'none';
-    roomInfoUi.style.display = (uiState.startsWith('in_room')) ? 'flex' : 'none';
     const inRoom = uiState.startsWith('in_room');
     const isHost = uiState === 'in_room_host';
     const isViewer = uiState === 'in_room_viewer';
+    $('#openRealtimeBtn').style.display = inRoom ? 'none' : 'inline-flex';
+    roomInfoUi.style.display = inRoom ? 'flex' : 'none';
     playerListContainer.style.display = inRoom ? 'block' : 'none';
+    const isError = uiState === 'error';
     // ルーム内にいて、タイマーが作動している場合のみ表示する
     if (inRoom && state.roomExpiryTimer) {
       roomTimerContainer.style.display = 'inline-flex';
@@ -1598,28 +2141,24 @@ function setRealtimeUiState(uiState) {
     hostBadge.style.display = isHost ? 'inline-block' : 'none';
     roomPasswordDisplay.style.display = isHost ? 'inline-block' : 'none';
     $('#roomPasswordLabel').style.display = isHost ? 'inline-block' : 'none';
-    if (isHost && state.roomId && state.roomPassword) {
-      const url = new URL(window.location.origin + window.location.pathname);
-      url.searchParams.set('room', state.roomId);
-      url.searchParams.set('password', state.roomPassword);
-      inviteLinkDisplay.value = url.href;
-      inviteLinkContainer.style.display = 'flex';
-    } else {
-      inviteLinkContainer.style.display = 'none';
-    }
-    playerNameInput.disabled = inRoom;
+    copyInviteLinkBtn.style.display = isHost ? 'inline-block' : 'none';
+
+    // エラー時は操作させない
+    createRoomBtn.disabled = isError;
+    joinRoomBtn.disabled = isError;
 
     // isViewerは、ルーム内の視聴者である場合にtrue。ローカルモードやホストの場合はfalse。
     // これを使ってホスト専用コントロールの有効/無効を一括で設定する。
-    const disableHostControls = isViewer;
+    const hideHostControls = isViewer;
 
-    // ホスト専用コントロール（スピン、リセット、人数設定、重複なし）
-    $$('.host-control button, .host-control input').forEach(el => {
-      el.disabled = disableHostControls;
+    // ホスト専用コントロール（スピン、リセット、人数設定、重複なし）を非表示/表示
+    $$('.host-control').forEach(el => {
+      // `display: ''` はインラインスタイルを削除し、CSSで定義されたスタイルに戻す
+      el.style.display = hideHostControls ? 'none' : '';
     });
-    // フィルターUI
+    // フィルターUIは閲覧者が設定を確認できるように、非表示ではなく無効化する
     $$('#classFilters input, #classFilters button').forEach(el => {
-      el.disabled = disableHostControls;
+      el.disabled = hideHostControls;
     });
 }
 
@@ -1657,6 +2196,7 @@ function handleLeaveRoom(removeFromDb = true) {
 
   setRealtimeUiState('disconnected');
   updatePlayerList([]);
+  renderFriendsList(); // ルーム退出をフレンドリストに反映
 
   // Clear online history and load local history
   state.history = [];
@@ -1678,6 +2218,7 @@ function sendChatMessage() {
       timestamp: firebase.database.ServerValue.TIMESTAMP
     });
     chatInput.value = '';
+    chatInput.focus(); // 送信後も入力欄にフォーカスを維持
   }
 }
 
@@ -1730,12 +2271,24 @@ function setupEventListeners() {
   joinRoomBtn.addEventListener('click', joinRoom);
   leaveRoomBtn.addEventListener('click', () => handleLeaveRoom(true));
   
+  // Player Settings Modal
+  playerSettingsBtn.addEventListener('click', () => playerSettingsModal.style.display = 'flex');
+  closePlayerSettingsBtn.addEventListener('click', () => playerSettingsModal.style.display = 'none');
+  playerSettingsModal.addEventListener('click', (e) => {
+    if (e.target === playerSettingsModal) playerSettingsModal.style.display = 'none';
+  });
+  confirmPlayerSettingsBtn.addEventListener('click', updatePlayerNameAndId);
+  settingsPlayerNameInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmPlayerSettingsBtn.click(); });
+  
   copyInviteLinkBtn.addEventListener('click', async () => {
-    if (!inviteLinkDisplay.value) return;
-    inviteLinkDisplay.select();
+    if (!state.isHost || !state.roomId || !state.roomPassword) return;
+    const url = new URL(window.location.origin + window.location.pathname);
+    url.searchParams.set('room', state.roomId);
+    url.searchParams.set('password', state.roomPassword);
+
     try {
-      await navigator.clipboard.writeText(inviteLinkDisplay.value);
-      showToast(t('copied-to-clipboard'));
+      await navigator.clipboard.writeText(url.href);
+      showToast(t('copied-invite-link'), 'success');
     } catch (err) {
       console.error('Failed to copy invite URL:', err);
       showToast(t('copy-failed'), 'error');
@@ -1745,6 +2298,7 @@ function setupEventListeners() {
   chatSendBtn.addEventListener('click', sendChatMessage);
   chatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
+      e.preventDefault(); // フォームのデフォルト送信を防止
       sendChatMessage();
     }
   });
@@ -1804,6 +2358,64 @@ function setupEventListeners() {
     }
   });
 
+  // Friend Modal
+  friendsBtn.addEventListener('click', () => {
+    if (!state.playerName) {
+      showToast(t('player-name-required'), 'error');
+      playerSettingsModal.style.display = 'flex';
+      return;
+    }
+    friendsModal.style.display = 'flex';
+    // Clear previous search results when opening
+    friendSearchResultEl.innerHTML = '';
+    friendSearchInput.value = '';
+  });
+  closeFriendsModalBtn.addEventListener('click', () => friendsModal.style.display = 'none');
+  friendsModal.addEventListener('click', (e) => {
+    if (e.target === friendsModal) friendsModal.style.display = 'none';
+  });
+
+  friendSearchBtn.addEventListener('click', async () => {
+    const query = friendSearchInput.value.replace('#', '').trim();
+    if (!query) return;
+    showLoader();
+    const user = await findUserByShortId(query);
+    renderFriendSearchResult(user);
+    hideLoader();
+  });
+  friendSearchInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') friendSearchBtn.click();
+  });
+
+  friendSearchResultEl.addEventListener('click', (e) => {
+    const target = e.target.closest('[data-action="send-friend-request"]');
+    if (target) {
+      sendFriendRequest(target.dataset.id);
+    }
+  });
+
+  friendRequestsListEl.addEventListener('click', (e) => {
+    const acceptBtn = e.target.closest('[data-action="accept-friend"]');
+    if (acceptBtn) {
+      acceptFriendRequest(acceptBtn.dataset.id);
+    }
+    const rejectBtn = e.target.closest('[data-action="reject-friend"]');
+    if (rejectBtn) {
+      rejectFriendRequest(rejectBtn.dataset.id);
+    }
+  });
+
+  friendsListEl.addEventListener('click', (e) => {
+    const removeBtn = e.target.closest('[data-action="remove-friend"]');
+    if (removeBtn) {
+      removeFriend(removeBtn.dataset.id, removeBtn.dataset.name);
+    }
+    const inviteBtn = e.target.closest('[data-action="invite-friend"]');
+    if (inviteBtn) {
+      inviteFriendToRoom(inviteBtn.dataset.id, inviteBtn.dataset.name);
+    }
+  });
+
   fullscreenBtn?.addEventListener('click', toggleFullscreen);
   document.addEventListener('fullscreenchange', updateFullscreenButton);
 
@@ -1827,41 +2439,40 @@ function setupEventListeners() {
   $('#autoCopy')?.addEventListener('change', saveSettings);
   $('#testWebhookBtn')?.addEventListener('click', testDiscordWebhook);
 
+  // Wake Lock Toggle
+  if ('wakeLock' in navigator) {
+    preventSleepToggle.addEventListener('change', async (e) => {
+      if (e.target.checked) { // ONにしようとした時
+        if ('getBattery' in navigator) {
+          try {
+            const battery = await navigator.getBattery();
+            if (battery.level <= 0.2 && !battery.charging) {
+              e.target.checked = false; // スイッチを強制的にOFFに戻す
+              showToast(t('battery-low-prevent-sleep'), 'error');
+              return; // 処理を中断
+            }
+          } catch (err) {
+            console.warn('Could not get battery status.', err);
+          }
+        }
+        requestWakeLock(); // バッテリーチェックを通過した場合のみONにする
+      } else { // OFFにした時
+        releaseWakeLock();
+      }
+      saveSettings();
+    });
+  }
+
   systemThemeListener.addEventListener('change', handleSystemThemeChange);
 
   historyEl.addEventListener('click', handleDeleteHistoryItem);
 
-  function createFilterChangeHandler(selector) {
-    return function(e) {
-      const checkboxes = $$(selector);
-      const checkedCount = checkboxes.filter(cb => cb.checked).length;
-      if (checkedCount === 0) {
-        e.currentTarget.checked = true;
-        return;
-      }
-      updatePool();
-      saveSettings();
-      if (state.isHost) {
-        updateFiltersOnFirebase();
-      }
-    };
-  }
+  // フィルターのチェックボックス（個別）が変更されたときのリスナー
+  $('#classFilters').addEventListener('change', handleFilterChange);
+  // 「重複なし」チェックボックスが変更されたときのリスナー
+  noRepeat.addEventListener('change', handleFilterChange);
 
-  $('#classFilters').addEventListener('change', e => {
-    const target = e.target;
-    if (target.matches('input[data-class]')) createFilterChangeHandler('input[data-class]')(e);
-    if (target.matches('input[data-sub]')) createFilterChangeHandler('input[data-sub]')(e);
-    if (target.matches('input[data-sp]')) createFilterChangeHandler('input[data-sp]')(e);
-  });
-
-  noRepeat.addEventListener('change', () => {
-    updatePool();
-    saveSettings();
-    if (state.isHost) {
-      updateFiltersOnFirebase();
-    }
-  });
-
+  // フィルターの「すべて選択/解除」ボタンがクリックされたときのリスナー
   $('#classFilters').addEventListener('click', e => {
     const toggleType = e.target.dataset.toggleAll;
     if (toggleType) {
@@ -1872,13 +2483,89 @@ function setupEventListeners() {
       const newCheckedState = !allCurrentlyChecked;
 
       checkboxes.forEach(cb => cb.checked = newCheckedState);
-      updatePool();
-      saveSettings();
-      if (state.isHost) {
-        updateFiltersOnFirebase();
-      }
+      handleFilterChange(); // 変更を適用
     }
   });
+
+  // Realtime Modal
+  const realtimeModal = $('#realtimeModal');
+  $('#openRealtimeBtn').addEventListener('click', () => {
+    realtimeModal.style.display = 'flex';
+  });
+  $('#closeRealtimeBtn').addEventListener('click', () => {
+    realtimeModal.style.display = 'none';
+  });
+  realtimeModal.addEventListener('click', e => {
+    if (e.target === realtimeModal) {
+      realtimeModal.style.display = 'none';
+    }
+  });
+
+  // --- 音声入力の初期化 ---
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (SpeechRecognition) {
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false; // 一つのフレーズを認識したら停止
+    recognition.lang = state.lang;
+    recognition.interimResults = false;
+
+    state.recognition = recognition; // stateに保持
+    let isListening = false;
+
+    recognition.onresult = (event) => {
+      const transcript = event.results[0][0].transcript;
+      // 既存のテキストがあればスペースを挟んで追記
+      chatInput.value += (chatInput.value.length > 0 ? ' ' : '') + transcript;
+    };
+
+    recognition.onerror = (event) => {
+      let errorKey = 'chat-voice-error-unknown';
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        errorKey = 'chat-voice-error-permission';
+      } else if (event.error === 'no-speech') {
+        errorKey = 'chat-voice-error-no-speech';
+      }
+      showToast(t(errorKey), 'error');
+    };
+
+    recognition.onstart = () => { isListening = true; voiceInputBtn.classList.add('listening'); voiceInputBtn.title = t('chat-voice-input-stop'); };
+    recognition.onend = () => { isListening = false; voiceInputBtn.classList.remove('listening'); voiceInputBtn.title = t('chat-voice-input-start'); };
+
+    voiceInputBtn.addEventListener('click', () => {
+      if (isListening) {
+        recognition.stop();
+      } else {
+        recognition.start();
+      }
+    });
+  } else {
+    voiceInputBtn.style.display = 'none'; // APIがサポートされていない場合はボタンを非表示
+  }
+}
+
+/**
+ * フィルターの変更を処理し、UIの更新とFirebaseへの同期を行う
+ * @param {Event} [event] - チェックボックスの変更イベント（オプション）
+ */
+function handleFilterChange(event) {
+  // イベントが渡された場合、最後のチェックボックスがオフにされるのを防ぐ
+  if (event && event.target && event.target.matches('input[type="checkbox"]')) {
+    const group = event.target.dataset.class ? 'class' : event.target.dataset.sub ? 'sub' : 'sp';
+    if (group) {
+      const selector = `input[data-${group}]`;
+      const checkboxes = $$(selector);
+      const checkedCount = checkboxes.filter(cb => cb.checked).length;
+      if (checkedCount === 0) {
+        event.target.checked = true; // チェックを元に戻す
+      }
+    }
+  }
+
+  updatePool();
+  saveSettings();
+  if (state.isHost) {
+    updateFiltersOnFirebase();
+  }
 }
 
 function init() {
@@ -1926,11 +2613,130 @@ function init() {
     updatePool();
   }
 
+  // Wake Lock UIの表示制御
+  if ('wakeLock' in navigator) {
+    $('#wakeLockSetting').style.display = 'flex';
+    $('#wakeLockHelp').style.display = 'block';
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    // バッテリー監視機能を追加
+    if ('getBattery' in navigator) {
+      navigator.getBattery().then(battery => {
+        const handleBatteryChange = () => {
+          // スリープ防止が有効な状態で、バッテリーが20%以下かつ充電中でない場合
+          if (preventSleepToggle.checked && battery.level <= 0.2 && !battery.charging) {
+            releaseWakeLock(); // WakeLockを解放
+            preventSleepToggle.checked = false; // UIのスイッチもOFFにする
+            saveSettings(); // 設定を保存
+            showToast(t('battery-low-prevent-sleep'), 'error');
+          }
+        };
+        battery.addEventListener('levelchange', handleBatteryChange);
+        battery.addEventListener('chargingchange', handleBatteryChange);
+      }).catch(err => console.warn('Cannot monitor battery status.', err));
+    }
+  }
+
+  // 初期プレイヤー名とIDの読み込み
   const savedName = localStorage.getItem('splaRoulettePlayerName') || '';
-  playerNameInput.value = savedName;
-  playerNameInput.addEventListener('input', () => {
-    localStorage.setItem('splaRoulettePlayerName', playerNameInput.value);
-    state.playerName = playerNameInput.value;
+  syncAndSavePlayerName(savedName);
+
+  // 非同期で初期IDを読み込んで表示
+  (async () => {
+    if (state.playerName) {
+      try {
+        const persistentUserId = getPersistentUserId();
+        const shortId = await getOrCreateUserShortId(persistentUserId, state.playerName);
+        playerShortIdDisplay.textContent = `#${shortId}`;
+        // プレイヤー情報が確定したので、フレンド関連のリスナーを開始
+        listenToFriends();
+        listenToFriendRequests();
+        listenToInvitations();
+      } catch (error) {
+        console.error("Failed to load initial player ID:", error);
+      }
+    }
+  })();
+}
+
+/**
+ * ルームへの招待をリッスンする
+ */
+function listenToInvitations() {
+  const myId = getPersistentUserId();
+  if (!myId || !state.db) return;
+  const invitationsRef = state.db.ref(`invitations/${myId}`);
+
+  // 既存のリスナーをデタッチ
+  invitationsRef.off();
+
+  invitationsRef.on('child_added', (snapshot) => {
+    const invitation = snapshot.val();
+    const invitationKey = snapshot.key;
+    if (!invitation) return;
+
+    // 自分が既にルームにいる場合は招待を無視して削除
+    if (state.roomId) {
+      invitationsRef.child(invitationKey).remove();
+      return;
+    }
+
+    const message = t('friends-invite-received-body', { name: invitation.inviterName });
+    const actions = [
+      {
+        text: t('friends-invite-join'),
+        className: 'success',
+        callback: () => {
+          friendsModal.style.display = 'none'; // 他のモーダルを閉じる
+          roomIdInput.value = invitation.roomId;
+          roomPasswordInput.value = invitation.roomPassword;
+          joinRoom();
+          invitationsRef.child(invitationKey).remove();
+        }
+      },
+      { text: t('friends-invite-decline'), className: 'danger', callback: () => invitationsRef.child(invitationKey).remove() }
+    ];
+    showToast(message, 'info', 15000, actions);
+  });
+}
+
+/**
+ * フレンド申請をリッスンする
+ */
+function listenToFriendRequests() {
+  const myId = getPersistentUserId();
+  if (!myId || !state.db) return;
+  const requestsRef = state.db.ref(`friendRequests/${myId}`);
+
+  requestsRef.on('value', (snapshot) => {
+    const requests = snapshot.val() || {};
+    state.friendRequests = Object.values(requests);
+    renderFriendRequests();
+  }, (error) => {
+    console.error("Error listening to friend requests:", error);
+  });
+}
+
+/**
+ * フレンドリストをリッスンする
+ */
+function listenToFriends() {
+  const myId = getPersistentUserId();
+  if (!myId || !state.db) return;
+  const friendsRef = state.db.ref(`users/${myId}/friends`);
+
+  friendsRef.on('value', async (snapshot) => {
+    const friendIds = snapshot.val() ? Object.keys(snapshot.val()) : [];
+    const friendPromises = friendIds.map(id => state.db.ref(`users/${id}`).once('value'));
+    
+    const friendSnapshots = await Promise.all(friendPromises);
+
+    state.friends = friendSnapshots
+      .map(snap => ({ id: snap.key, ...snap.val() }))
+      .filter(f => f.name); // Ensure friend data exists
+    renderFriendsList();
+  }, (error) => {
+    console.error("Error listening to friends list:", error);
   });
 }
 
