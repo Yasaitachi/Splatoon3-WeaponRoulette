@@ -17,6 +17,10 @@ const firebaseConfig = {
 };
 // ▲▲▲ PASTE FIREBASE CONFIG HERE ▲▲▲
 
+// --- 管理者設定 ---------------------------------------------------------
+// ここに管理者の永続IDを追加してください。IDは複数指定可能です。
+// 自分のIDは開発者ツールで localStorage.getItem('persistentUserId') を実行して確認できます。
+const ADMIN_USER_IDS = ["2F086383e5-8f3c-4bd1-acab-637338be5d44"];
 
 // --- グローバル変数 ---------------------------------------------------------
 const APP_VERSION = '1.2.5'; // アプリケーションのバージョン。更新時にこの数値を変更する。
@@ -42,6 +46,7 @@ const state = {
   theme: 'system',
   roomPassword: null,
   roomExpiryTimer: null,
+  mutedUsers: {},
   // Friend system state
   friends: [],
   friendRequests: [],
@@ -105,6 +110,9 @@ const friendSearchResultEl = $('#friendSearchResult');
 const friendRequestsListEl = $('#friendRequestsList');
 const sentFriendRequestsListEl = $('#sentFriendRequestsList');
 const friendsListEl = $('#friendsList');
+const ghostJoinContainer = $('#ghost-join-container');
+const ghostJoinCheckbox = $('#ghostJoinCheckbox');
+const adminLink = $('#adminLink');
 
 // --- アプリケーションロジック ----------------------------------------------
 
@@ -301,6 +309,7 @@ async function updatePlayerNameAndId() {
     listenToFriends();
     listenToFriendRequests();
     listenToSentFriendRequests();
+    updateAdminUI();
   } catch (error) {
     showServerError(t('player-settings-update-failed'), error);
   } finally {
@@ -1314,14 +1323,20 @@ function updatePlayerList(players) {
     playerListEl.innerHTML = `<div class="empty" data-i18n-key="player-list-empty">${t('player-list-empty')}</div>`;
     return;
   }
+  const myId = getPersistentUserId();
+  const isAdmin = myId && ADMIN_USER_IDS.map(id => id.toLowerCase()).includes(myId.toLowerCase());
+
   playerListEl.innerHTML = players.map(player => {
     const isMe = state.playerRef && player.id === state.playerRef.key;
     const hostIndicator = player.isHost ? ` <span class="host-icon" title="${t('realtime-host')}">👑</span>` : '';
     const meIndicator = isMe ? ` <span class="muted">(${t('you')})</span>` : '';
     const displayId = player.shortId ? `#${player.shortId}` : '#----';
 
+    const isMuted = state.mutedUsers && state.mutedUsers[player.id];
+    const mutedIndicator = isMuted ? ` <span class="muted-icon" title="${t('player-muted-indicator')}">🔇</span>` : '';
+
     let adminControls = '';
-    if (state.isHost && !player.isHost) {
+    if (isAdmin && !isMe) {
         adminControls = `
           <div class="player-actions">
               <button class="btn-kick menu" data-action="admin-menu" data-player-id="${player.id}" data-player-name="${player.name}" title="${t('realtime-admin-menu')}">︙</button>
@@ -1333,7 +1348,7 @@ function updatePlayerList(players) {
     <div class="player-item">
         <div class="player-name" data-player-name="${player.name}" title="${t('chat-mention-tooltip', { name: player.name })}">
           <span class="player-id-display">${displayId}</span>
-          <span>${escapeHTML(player.name)}${hostIndicator}</span>
+          <span>${escapeHTML(player.name)}${hostIndicator}${mutedIndicator}</span>
           ${meIndicator}
         </div>
         ${adminControls}
@@ -1673,6 +1688,7 @@ function initFirebase() {
     const params = new URLSearchParams(window.location.search);
     const roomIdFromUrl = params.get('room');
     const passwordFromUrl = params.get('password');
+    const spectateFromUrl = params.get('spectate');
 
     if (roomIdFromUrl) {
       roomIdInput.value = roomIdFromUrl;
@@ -1681,17 +1697,25 @@ function initFirebase() {
       roomPasswordInput.value = passwordFromUrl;
     }
 
+    // 管理者による観戦モードの場合、ゴースト参加をデフォルトで有効にする
+    const myId = getPersistentUserId();
+    const isAdmin = myId && ADMIN_USER_IDS.map(id => id.toLowerCase()).includes(myId.toLowerCase());
+    if (spectateFromUrl === 'true' && isAdmin) {
+      ghostJoinCheckbox.checked = true;
+    }
+
     // 両方のパラメータが存在する場合、自動参加を試みる
     if (roomIdFromUrl && passwordFromUrl) {
       // 少し待ってから参加処理を開始することで、UIの準備が整うのを待つ
       setTimeout(() => {
         // プレイヤー名がlocalStorageなどから読み込まれていれば、自動で参加処理を実行
-        if (playerNameInput.value.trim()) {
+            if (state.playerName.trim()) {
           joinRoomBtn.click();
         } else {
           // プレイヤー名が未入力の場合は、入力を促す
           showToast(t('realtime-autojoin-name-required'), 'info');
-          playerNameInput.focus();
+              playerSettingsModal.style.display = 'flex';
+              settingsPlayerNameInput.focus();
         }
       }, 500); // 500msの遅延
     }
@@ -1716,6 +1740,7 @@ function showAdminMenu(targetButton) {
   menu.innerHTML = `
     <button class="admin-menu-item" data-action="kick" data-player-id="${playerId}" data-player-name="${playerName}">${t('realtime-kick-player')}</button>
     <button class="admin-menu-item block" data-action="block" data-player-id="${playerId}" data-player-name="${playerName}">${t('realtime-block-player')}</button>
+    <div class="admin-menu-divider"></div>
     <button class="admin-menu-item ban" data-action="ban" data-player-id="${playerId}" data-player-name="${playerName}">${t('realtime-ban-player')}</button>
   `;
 
@@ -1734,7 +1759,9 @@ function closeAdminMenu() {
 }
 
 function kickPlayer(playerId, playerName) {
-    if (!state.isHost || !state.roomRef) return;    
+    const myId = getPersistentUserId();
+    const isAdmin = myId && ADMIN_USER_IDS.map(id => id.toLowerCase()).includes(myId.toLowerCase());
+    if (!isAdmin || !state.roomRef) return;
     // プレイヤーにキックされたことを通知
     state.roomRef.child('notifications').child(playerId).set({
         type: 'kick',
@@ -1747,7 +1774,17 @@ function kickPlayer(playerId, playerName) {
 }
 
 function blockPlayer(playerId, playerName) {
-    if (!state.isHost || !state.roomRef) return;    
+    const myId = getPersistentUserId();
+    const isAdmin = myId && ADMIN_USER_IDS.map(id => id.toLowerCase()).includes(myId.toLowerCase());
+    if (!isAdmin || !state.roomRef) return;
+
+    // プレイヤーにキックされたことを通知 (ブロックはキックも兼ねる)
+    state.roomRef.child('notifications').child(playerId).set({
+        type: 'kick',
+        hostName: state.playerName,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+    });
+
     state.roomRef.child('blockedNames').push(playerName);
     const message = t('system-player-blocked', { name: playerName, host: state.playerName });
     state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
@@ -1755,9 +1792,20 @@ function blockPlayer(playerId, playerName) {
 }
 
 function banPlayer(playerId, playerName) {
-    if (!state.isHost || !state.roomRef) return;    
+    const myId = getPersistentUserId();
+    const isAdmin = myId && ADMIN_USER_IDS.map(id => id.toLowerCase()).includes(myId.toLowerCase());
+    if (!isAdmin || !state.roomRef) return;
     const playerToBan = state.players.find(p => p.id === playerId);
-    if (!playerToBan || !playerToBan.ip) return;
+    if (!playerToBan) return; // Should not happen if UI is correct
+
+    // IPアドレスが取得できていない場合のフォールバック処理
+    if (!playerToBan.ip) {
+        if (confirm(t('realtime-ban-no-ip-confirm', { name: playerName }))) {
+            // IP BANができないので、代わりに名前ブロックを実行
+            blockPlayer(playerId, playerName);
+        }
+        return;
+    }
 
     // プレイヤーにBANされたことを通知
     state.roomRef.child('notifications').child(playerId).set({
@@ -1823,9 +1871,10 @@ async function createRoom() { // UIの状態を更新して、処理中である
       joinedAt: firebase.database.ServerValue.TIMESTAMP,
       ip: ip
     });
-    // ホストが切断した場合は、自分のプレイヤー情報のみを削除する
-    state.playerRef.onDisconnect().remove();
+    // ホストが予期せず切断した場合は、ルーム全体を削除する
+    state.roomRef.onDisconnect().remove();
     listenToRoomChanges();
+    await state.db.ref(`users/${persistentUserId}/status/lastIP`).set(ip);
     $('#realtimeModal').style.display = 'none';
     // ルーム作成時に現在のフィルター状態を書き込む
     updateFiltersOnFirebase();
@@ -1898,7 +1947,7 @@ async function joinRoom() {
     const bannedIPsSnapshot = await state.roomRef.child('bannedIPs').once('value');
     const bannedIPs = Object.values(bannedIPsSnapshot.val() || {});
     if (ip && bannedIPs.includes(ip)) {
-        showToast(t('realtime-error-banned-ip'), 'error', 6000);
+        showToast(t('realtime-error-banned'), 'error', 6000);
         return;
     }
 
@@ -1912,8 +1961,10 @@ async function joinRoom() {
 
     // ルームの最大人数をチェック
     const clients = roomData.clients || {};
+    const isGhostJoin = ghostJoinCheckbox.checked && persistentUserId && ADMIN_USER_IDS.map(id => id.toLowerCase()).includes(persistentUserId.toLowerCase());
     const clientCount = Object.keys(clients).length;
-    if (clientCount >= 10) {
+    // ゴースト入室でない場合のみ人数チェックを行う
+    if (clientCount >= 10 && !isGhostJoin) {
       // このメッセージは i18n.js に追加する必要があります。
       showToast(t('realtime-error-full'), 'error');
       return;
@@ -1926,10 +1977,12 @@ async function joinRoom() {
       name: state.playerName,
       shortId: playerShortId,
       joinedAt: firebase.database.ServerValue.TIMESTAMP,
-      ip: ip
+      ip: ip,
+      isGhost: isGhostJoin,
     });
     state.playerRef.onDisconnect().remove();
 
+    await state.db.ref(`users/${persistentUserId}/status/lastIP`).set(ip);
     listenToRoomChanges();
     $('#realtimeModal').style.display = 'none';
   } catch (error) {
@@ -1977,6 +2030,34 @@ function listenToRoomChanges() {
     }
   });
 
+  // Listen to muted users
+  state.roomRef.child('mutedUsers').on('value', (snapshot) => {
+      const mutedData = snapshot.val() || {};
+      const now = Date.now();
+      const activeMutes = {};
+
+      // Check for expired mutes
+      for (const userId in mutedData) {
+          if (mutedData[userId].expiresAt > now) {
+              activeMutes[userId] = mutedData[userId];
+          } else {
+              // Mute has expired, remove it from DB if host
+              if (state.isHost) {
+                  state.roomRef.child('mutedUsers').child(userId).remove();
+                  // Find player name for unmute message
+                  const unmutedPlayer = state.players.find(p => p.id === userId);
+                  if (unmutedPlayer) {
+                      const message = t('system-player-unmuted', { name: unmutedPlayer.name });
+                      state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
+                  }
+              }
+          }
+      }
+      state.mutedUsers = activeMutes;
+      // Re-render player list to show/hide mute icon
+      if (state.players) updatePlayerList(state.players);
+  });
+
   // 自分への通知（キック、BANなど）をリッスン
   const notificationRef = state.roomRef.child('notifications').child(state.playerRef.key);
   notificationRef.on('value', (snapshot) => {
@@ -1984,16 +2065,27 @@ function listenToRoomChanges() {
       return;
     }
 
-    // 通知を受け取ったら、すぐにDBから削除して再発火を防ぐ
-    notificationRef.remove();
-
-    const { type, hostName } = snapshot.val();
+    const { type, hostName, message: warningMessage } = snapshot.val();
     let messageKey = '';
-    if (type === 'kick') messageKey = 'system-you-were-kicked';
-    else if (type === 'ban') messageKey = 'system-you-were-banned';
+    let toastMessage = '';
+
+    if (type === 'kick') {
+      messageKey = 'system-you-were-kicked';
+      toastMessage = t(messageKey, { host: hostName });
+    } else if (type === 'ban') {
+      messageKey = 'system-you-were-banned';
+      toastMessage = t(messageKey, { host: hostName });
+    } else if (type === 'warn') {
+      // 警告の場合はルームから退出させず、メッセージのみ表示
+      toastMessage = `${t('system-you-were-warned-title')}: ${warningMessage}`;
+      showToast(toastMessage, 'error', 10000); // 警告は10秒間表示
+      notificationRef.remove(); // 通知を削除
+      return; // 処理を終了
+    }
 
     if (messageKey) {
-      const message = t(messageKey, { host: hostName });
+      // 通知を受け取ったら、すぐにDBから削除して再発火を防ぐ
+      notificationRef.remove();
 
       // 他のリスナー（特に 'clients'）が発火する前に、すべてのリスナーを停止する
       if (state.roomRef) {
@@ -2001,7 +2093,7 @@ function listenToRoomChanges() {
       }
 
       // ユーザーに通知
-      showToast(message, 'error', 8000);
+      showToast(toastMessage, 'error', 8000);
 
       // UIをリセットし、ルームから退出した状態にする
       handleLeaveRoom(false);
@@ -2012,13 +2104,14 @@ function listenToRoomChanges() {
 
   // Get hostId once, then listen to client changes.
   // This assumes host doesn't change.
-  state.roomRef.child('hostId').once('value', (hostSnapshot) => {
+  state.roomRef.child('hostId').once('value', (hostSnapshot) => { // 参加者リストの変更をリッスン
     const hostId = hostSnapshot.val();
 
     // 参加者リストの変更をリッスン
     state.roomRef.child('clients').on('value', (snapshot) => {
       const clients = snapshot.val() || {};
 
+      // ホストかつ初回ロード後、またはゴーストでないプレイヤーの変更があった場合にメッセージを送信
       if (!isInitialLoad && state.isHost) {
         handlePlayerChanges(clients, previousPlayers);
       }
@@ -2027,6 +2120,7 @@ function listenToRoomChanges() {
 
       const playerArray = Object.entries(clients)
         .sort(([, a], [, b]) => a.joinedAt - b.joinedAt)
+        .filter(([, val]) => !val.isGhost) // ゴーストユーザーをリストから除外
         .map(([key, val]) => ({
           id: key,
           name: val.name,
@@ -2134,7 +2228,8 @@ function handlePlayerChanges(currentPlayers, previousPlayers) {
 
   const newPlayerIds = currentPlayerIds.filter(id => !previousPlayerIds.includes(id));
   newPlayerIds.forEach(id => {
-    if (currentPlayers[id]) {
+    // ゴーストでないユーザーの参加のみ通知
+    if (currentPlayers[id] && !currentPlayers[id].isGhost) {
       const message = t('system-player-joined', { name: currentPlayers[id].name });
       state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
     }
@@ -2142,7 +2237,8 @@ function handlePlayerChanges(currentPlayers, previousPlayers) {
 
   const leftPlayerIds = previousPlayerIds.filter(id => !currentPlayerIds.includes(id));
   leftPlayerIds.forEach(id => {
-    if (previousPlayers[id]) {
+    // ゴーストでないユーザーの退出のみ通知
+    if (previousPlayers[id] && !previousPlayers[id].isGhost) {
       const message = t('system-player-left', { name: previousPlayers[id].name });
       state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
     }
@@ -2202,9 +2298,16 @@ function setRealtimeUiState(uiState) {
 }
 
 function handleLeaveRoom(removeFromDb = true) {
-  if (removeFromDb && state.playerRef) {
-    state.playerRef.onDisconnect().cancel();
-    state.playerRef.remove();
+  if (removeFromDb) {
+    if (state.isHost && state.roomRef) {
+      // ホストの場合、ルーム全体のonDisconnectをキャンセルし、ルームを削除
+      state.roomRef.onDisconnect().cancel();
+      state.roomRef.remove();
+    } else if (state.playerRef) {
+      // 視聴者の場合、自分のonDisconnectをキャンセルし、自分の情報のみを削除
+      state.playerRef.onDisconnect().cancel();
+      state.playerRef.remove();
+    }
   }
 
   if (state.roomRef) {
@@ -2235,6 +2338,7 @@ function handleLeaveRoom(removeFromDb = true) {
   joinRoomBtn.disabled = false;
   createRoomBtn.textContent = t('realtime-create-btn');
   joinRoomBtn.textContent = t('realtime-join-btn');
+  ghostJoinCheckbox.checked = false;
   roomPasswordInput.value = '';
 
   setRealtimeUiState('disconnected');
@@ -2254,6 +2358,15 @@ function handleLeaveRoom(removeFromDb = true) {
 function sendChatMessage() {
   const message = chatInput.value.trim();
   if (message && state.roomRef) {
+    // Check if muted
+    const myId = state.playerRef.key;
+    const myMuteInfo = state.mutedUsers[myId];
+    if (myMuteInfo && myMuteInfo.expiresAt > Date.now()) {
+      const expiryTime = new Date(myMuteInfo.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      showToast(t('chat-error-muted', { time: expiryTime }), 'error');
+      return;
+    }
+
     state.roomRef.child('chat').push({
       name: state.playerName,
       message: message,
@@ -2264,6 +2377,20 @@ function sendChatMessage() {
   }
 }
 
+/**
+ * 管理者用のUIの表示状態を更新する
+ */
+function updateAdminUI() {
+  const myId = getPersistentUserId();
+  const isAdmin = myId && ADMIN_USER_IDS.map(id => id.toLowerCase()).includes(myId.toLowerCase());
+
+  if (ghostJoinContainer) {
+    ghostJoinContainer.style.display = isAdmin ? 'flex' : 'none';
+  }
+  if (adminLink) {
+    adminLink.style.display = isAdmin ? 'inline-flex' : 'none';
+  }
+}
 
 // --- 初期化とイベントリスナー設定 ------------------------------------
 
@@ -2364,10 +2491,13 @@ function setupEventListeners() {
     const menuItem = e.target.closest('.admin-menu-item');
     const openMenu = document.getElementById('active-admin-menu');
 
+    const myId = getPersistentUserId();
+    const isAdmin = myId && ADMIN_USER_IDS.map(id => id.toLowerCase()).includes(myId.toLowerCase());
+
     // If a menu button is clicked
     if (menuButton) {
         e.stopPropagation();
-        if (!state.isHost) return;
+        if (!isAdmin) return;
 
         // If a menu is open for this button, close it. Otherwise, open it.
         if (openMenu && openMenu.dataset.openerPlayerId === menuButton.dataset.playerId) {
@@ -2380,7 +2510,7 @@ function setupEventListeners() {
 
     // If a menu item is clicked
     if (menuItem) {
-        if (!state.isHost) return;
+        if (!isAdmin) return;
         const { action, playerId, playerName } = menuItem.dataset;
         
         if (action === 'kick') {
@@ -2614,6 +2744,34 @@ function handleFilterChange(event) {
   }
 }
 
+async function initializeBanListener() {
+  const myId = getPersistentUserId();
+  if (!myId || !state.db) return;
+
+  const banRef = state.db.ref(`bannedUsers/${myId}`);
+
+  const handleBan = (snapshot) => {
+    if (snapshot.exists()) {
+      if (state.roomRef) {
+        handleLeaveRoom(false);
+      }
+      document.body.innerHTML = `<div class="card" style="margin: auto; padding: 2rem; text-align: center;"><h1>${t('realtime-error-banned-globally')}</h1></div>`;
+      state.db.ref().off();
+      return true;
+    }
+    return false;
+  };
+
+  // Initial check
+  const initialSnapshot = await banRef.once('value');
+  if (handleBan(initialSnapshot)) {
+    throw new Error('User is banned.');
+  }
+
+  // Listen for future changes
+  banRef.on('value', handleBan);
+}
+
 function init() {
   // --- バージョンチェックと強制リロード ---
   // ローカルに保存されたバージョンと現在のアプリバージョンを比較
@@ -2647,9 +2805,6 @@ function init() {
   buildFilterUI();
   setupEventListeners();
   loadAndApplySettings();
-
-  // Firebaseを常に初期化して、いつでもルーム作成・参加ができるようにする
-  initFirebase();
 
   const params = new URLSearchParams(window.location.search);
   if (!params.has('room')) {
@@ -2687,10 +2842,14 @@ function init() {
   const savedName = localStorage.getItem('splaRoulettePlayerName') || '';
   syncAndSavePlayerName(savedName);
 
+  // Firebaseを初期化。プレイヤー名が読み込まれた後に行うことで、自動参加が正しく機能する。
+  initFirebase();
+
   // 非同期で初期IDを読み込んで表示
   (async () => {
     if (state.playerName) {
       try {
+        await initializeBanListener();
         const persistentUserId = getPersistentUserId();
         const shortId = await getOrCreateUserShortId(persistentUserId, state.playerName);
         manageUserPresence();
@@ -2700,7 +2859,7 @@ function init() {
         listenToFriendRequests();
         listenToSentFriendRequests();
       } catch (error) {
-        console.error("Failed to load initial player ID:", error);
+        console.error("Initialization failed:", error.message);
       }
     }
   })();

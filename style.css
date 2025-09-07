@@ -649,6 +649,12 @@ html[data-theme="dark"] .chat-message.own .chat-bubble::after {
 .host-icon {
   font-size: 16px;
 }
+.muted-icon {
+  font-size: 14px;
+  color: var(--danger);
+  margin-left: 4px;
+  vertical-align: middle;
+}
 
 .player-item .player-name {
   display: flex;
@@ -945,6 +951,167 @@ body.offline::before {
 @keyframes progressBarShrink {
   from { width: 100%; }
   to { width: 0%; }
+}
+
+/* --- Admin Page Styles --- */
+.admin-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 20px;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-top: 12px;
+}
+
+.summary-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px;
+  background: var(--history-item-bg);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+}
+
+.summary-item span {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.summary-item strong {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--accent);
+}
+
+.table-container {
+  max-height: 400px;
+  overflow: auto;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  margin-top: 12px;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.admin-table th, .admin-table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--card-border);
+}
+
+.admin-table thead th {
+  background-color: var(--prob-table-header-bg);
+  position: sticky;
+  top: 0;
+}
+
+.admin-table .admin-room-link {
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+.admin-table .admin-room-link:hover { text-decoration: underline; }
+
+.btn-admin-action {
+  appearance: none;
+  border: 1px solid var(--card-border);
+  background: var(--chip-bg);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .2s ease;
+}
+.btn-admin-action.danger { border-color: var(--danger); color: var(--danger); }
+.btn-admin-action.danger:hover { background: var(--danger); color: var(--btn-text); }
+
+.admin-table tr.updated {
+  animation: flash-yellow 1.5s ease-out;
+}
+.admin-table tr.new {
+  animation: flash-green 1.5s ease-out;
+}
+
+@keyframes flash-yellow {
+  from { background-color: rgba(255, 255, 0, 0.3); }
+  to { background-color: transparent; }
+}
+
+@keyframes flash-green {
+  from { background-color: rgba(76, 175, 80, 0.4); }
+  to { background-color: transparent; }
+}
+
+/* Admin Chat Viewer Modal */
+.admin-chat-messages {
+  height: 60vh;
+  max-height: 60vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background-color: var(--bg);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.admin-chat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 6px;
+  background-color: var(--history-item-bg);
+}
+
+.admin-chat-item.system {
+  justify-content: center;
+  font-style: italic;
+  color: var(--muted);
+  background-color: transparent;
+  border-bottom: 1px solid var(--card-border);
+  border-radius: 0;
+}
+
+.admin-chat-main {
+  flex-grow: 1;
+}
+
+.admin-chat-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.admin-chat-author {
+  font-weight: 700;
+}
+
+.admin-chat-timestamp {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.admin-chat-message {
+  word-break: break-word;
+}
+
+.admin-chat-actions {
+  flex-shrink: 0;
 }
 
 /* その他のアニメーション */
