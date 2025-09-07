@@ -656,6 +656,26 @@ html[data-theme="dark"] .chat-message.own .chat-bubble::after {
   gap: 8px;
 }
 
+/* オンラインステータスインジケーター */
+.online-status {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-right: 4px;
+  border: 1px solid rgba(0,0,0,0.2);
+}
+
+.online-status.online {
+  background-color: #4caf50; /* Green */
+  box-shadow: 0 0 5px #4caf50;
+}
+
+.online-status.offline {
+  background-color: var(--muted);
+  opacity: 0.5;
+}
+
 /* プレイヤーIDのスタイル */
 .player-id-display {
   font-size: 12px;

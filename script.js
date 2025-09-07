@@ -19,7 +19,7 @@ const firebaseConfig = {
 
 
 // --- グローバル変数 ---------------------------------------------------------
-const APP_VERSION = '1.2.0'; // アプリケーションのバージョン。更新時にこの数値を変更する。
+const APP_VERSION = '1.2.5'; // アプリケーションのバージョン。更新時にこの数値を変更する。
 const RESET_TIMEOUT_MS = 10000; // 10秒
 const ROOM_EXPIRATION_MS = 10 * 60 * 1000; // 10分
 const ROOM_LIFETIME_MS = 3 * 60 * 60 * 1000; // 3時間
@@ -45,6 +45,8 @@ const state = {
   // Friend system state
   friends: [],
   friendRequests: [],
+  sentFriendRequests: [],
+  friendStatusListeners: {},
 };
 
 const ICONS = {
@@ -101,6 +103,7 @@ const friendSearchInput = $('#friendSearchInput');
 const friendSearchBtn = $('#friendSearchBtn');
 const friendSearchResultEl = $('#friendSearchResult');
 const friendRequestsListEl = $('#friendRequestsList');
+const sentFriendRequestsListEl = $('#sentFriendRequestsList');
 const friendsListEl = $('#friendsList');
 
 // --- アプリケーションロジック ----------------------------------------------
@@ -251,6 +254,31 @@ function showServerError(message, error) {
 }
 
 /**
+ * ユーザーのオンライン状態をFirebaseで管理する
+ */
+function manageUserPresence() {
+  const myId = getPersistentUserId();
+  if (!myId || !state.db) return;
+
+  const userStatusRef = state.db.ref(`users/${myId}/status`);
+  const connectedRef = state.db.ref('.info/connected');
+
+  connectedRef.on('value', (snap) => {
+    if (snap.val() !== true) {
+      return;
+    }
+    // onDisconnectは接続が確立されるたびに再設定する必要がある
+    userStatusRef.onDisconnect().set({
+      isOnline: false,
+      lastSeen: firebase.database.ServerValue.TIMESTAMP
+    }).then(() => {
+      // onDisconnect設定後にオンライン状態をセット
+      userStatusRef.set({ isOnline: true, lastSeen: firebase.database.ServerValue.TIMESTAMP });
+    });
+  });
+}
+
+/**
  * プレイヤー名とIDを更新し、UIに反映する
  */
 async function updatePlayerNameAndId() {
@@ -268,9 +296,11 @@ async function updatePlayerNameAndId() {
     playerShortIdDisplay.textContent = `#${shortId}`;
     showToast(t('player-settings-updated'), 'success');
     playerSettingsModal.style.display = 'none';
+    manageUserPresence();
     // プレイヤー情報が確定したので、フレンド関連のリスナーを開始
     listenToFriends();
     listenToFriendRequests();
+    listenToSentFriendRequests();
   } catch (error) {
     showServerError(t('player-settings-update-failed'), error);
   } finally {
@@ -1345,11 +1375,17 @@ function renderFriendSearchResult(user) {
   const myId = getPersistentUserId();
   const isMe = user.id === myId;
   const isAlreadyFriend = state.friends.some(f => f.id === user.id);
-  // TODO: Check for pending requests
+  const isRequestSent = state.sentFriendRequests.some(req => req.recipientId === user.id);
 
   let actionButton = '';
-  if (!isMe && !isAlreadyFriend) {
-    actionButton = `<button class="btn secondary" data-action="send-friend-request" data-id="${user.id}" style="padding: 4px 10px;">${t('friends-send-request')}</button>`;
+  if (isMe) {
+    // No button for self
+  } else if (isAlreadyFriend) {
+    // No button if already friends
+  } else if (isRequestSent) {
+    actionButton = `<button class="btn" disabled style="padding: 4px 10px;">${t('friends-request-sent-label')}</button>`;
+  } else {
+    actionButton = `<button class="btn secondary" data-action="send-friend-request" data-id="${user.id}" data-name="${escapeHTML(user.name)}" data-short-id="${user.shortId}" style="padding: 4px 10px;">${t('friends-send-request')}</button>`;
   }
 
   friendSearchResultEl.innerHTML = `
@@ -1367,33 +1403,48 @@ function renderFriendSearchResult(user) {
 
 /**
  * フレンド申請を送信する
- * @param {string} targetUserId
+ * @param {string} targetUserId ターゲットの永続ID
+ * @param {string} targetUserName ターゲットのプレイヤー名
+ * @param {string} targetUserShortId ターゲットのShortID
  */
-async function sendFriendRequest(targetUserId) {
+async function sendFriendRequest(targetUserId, targetUserName, targetUserShortId) {
   const myId = getPersistentUserId();
   if (myId === targetUserId) {
     showToast(t('friends-request-self'), 'error');
     return;
   }
 
-  // Check if already friends or request pending
-  const friendRef = firebase.database().ref(`users/${myId}/friends/${targetUserId}`);
-  const friendSnap = await friendRef.once('value');
-  if (friendSnap.exists()) {
-      showToast(t('friends-request-already-sent'), 'info');
-      return;
+  // すでにフレンドか、申請済みかクライアントサイドでチェック
+  if (state.friends.some(f => f.id === targetUserId)) {
+    showToast(t('friends-request-already-friends'), 'info');
+    return;
   }
-  // This check is simplified. A more robust check would look at sent requests too.
+  if (state.sentFriendRequests.some(req => req.recipientId === targetUserId)) {
+    showToast(t('friends-request-already-sent'), 'info');
+    return;
+  }
 
+  const myShortId = playerShortIdDisplay.textContent.replace('#', '');
+
+  // 相手側に保存する申請データ
   const requestData = {
     senderId: myId,
     senderName: state.playerName,
-    senderShortId: playerShortIdDisplay.textContent.replace('#', ''),
+    senderShortId: myShortId,
+    timestamp: firebase.database.ServerValue.TIMESTAMP,
+  };
+
+  // 自分用に保存する送信済み申請データ
+  const sentRequestData = {
+    recipientId: targetUserId,
+    recipientName: targetUserName,
+    recipientShortId: targetUserShortId,
     timestamp: firebase.database.ServerValue.TIMESTAMP,
   };
 
   const updates = {};
   updates[`/friendRequests/${targetUserId}/${myId}`] = requestData;
+  updates[`/sentFriendRequests/${myId}/${targetUserId}`] = sentRequestData;
 
   try {
     await firebase.database().ref().update(updates);
@@ -1413,14 +1464,11 @@ async function acceptFriendRequest(senderId) {
   const updates = {};
   updates[`/users/${myId}/friends/${senderId}`] = true;
   updates[`/users/${senderId}/friends/${myId}`] = true;
-  updates[`/friendRequests/${myId}/${senderId}`] = null; // Remove request
+  updates[`/friendRequests/${myId}/${senderId}`] = null; // 受信した申請を削除
+  updates[`/sentFriendRequests/${senderId}/${myId}`] = null; // 相手の送信済みリストから削除
 
   try {
     await firebase.database().ref().update(updates);
-    const sender = state.friendRequests.find(req => req.senderId === senderId);
-    if (sender) {
-      showToast(t('friends-add-success', { name: sender.senderName }), 'success');
-    }
   } catch (error) {
     showServerError(t('friends-add-fail'), error);
   }
@@ -1432,10 +1480,35 @@ async function acceptFriendRequest(senderId) {
  */
 async function rejectFriendRequest(senderId) {
   const myId = getPersistentUserId();
+  const updates = {};
+  updates[`/friendRequests/${myId}/${senderId}`] = null; // 受信した申請を削除
+  updates[`/sentFriendRequests/${senderId}/${myId}`] = null; // 相手の送信済みリストから削除
+
   try {
-    await firebase.database().ref(`friendRequests/${myId}/${senderId}`).remove();
+    await firebase.database().ref().update(updates);
   } catch (error) {
     showServerError(t('error'), error);
+  }
+}
+
+/**
+ * 送信済みのフレンド申請をキャンセルする
+ * @param {string} targetUserId
+ * @param {string} targetUserName
+ */
+async function cancelFriendRequest(targetUserId, targetUserName) {
+  if (!confirm(t('friends-cancel-request-confirm', { name: targetUserName }))) return;
+
+  const myId = getPersistentUserId();
+  const updates = {};
+  updates[`/friendRequests/${targetUserId}/${myId}`] = null;
+  updates[`/sentFriendRequests/${myId}/${targetUserId}`] = null;
+
+  try {
+    await firebase.database().ref().update(updates);
+    showToast(t('friends-request-cancelled'), 'success');
+  } catch (error) {
+    showServerError(t('friends-request-cancel-fail'), error);
   }
 }
 
@@ -1482,16 +1555,49 @@ function renderFriendRequests() {
 }
 
 /**
+ * 送信済みフレンド申請リストを描画する
+ */
+function renderSentFriendRequests() {
+  if (state.sentFriendRequests.length === 0) {
+    sentFriendRequestsListEl.innerHTML = `<div class="empty" data-i18n-key="friends-sent-requests-empty">${t('friends-sent-requests-empty')}</div>`;
+    return;
+  }
+  sentFriendRequestsListEl.innerHTML = state.sentFriendRequests.map(req => `
+    <div class="player-item">
+      <div class="player-name">
+        <span class="player-id-display">#${req.recipientShortId}</span>
+        <span>${escapeHTML(req.recipientName)}</span>
+      </div>
+      <div class="player-actions">
+        <button class="btn danger" data-action="cancel-friend-request" data-id="${req.recipientId}" data-name="${escapeHTML(req.recipientName)}" style="padding: 2px 8px; font-size: 12px;">${t('friends-cancel-request')}</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+/**
  * フレンドリストを描画する
  */
 function renderFriendsList() {
-  if (state.friends.length === 0) {
+  const sortedFriends = [...state.friends].sort((a, b) => {
+    const aOnline = a.status?.isOnline ?? false;
+    const bOnline = b.status?.isOnline ?? false;
+    if (aOnline && !bOnline) return -1;
+    if (!aOnline && bOnline) return 1;
+    return (a.name || '').localeCompare(b.name || '');
+  });
+
+  if (sortedFriends.length === 0) {
     friendsListEl.innerHTML = `<div class="empty" data-i18n-key="friends-list-empty">${t('friends-list-empty')}</div>`;
     return;
   }
-  friendsListEl.innerHTML = state.friends.map(friend => `
+  friendsListEl.innerHTML = sortedFriends.map(friend => {
+    const isOnline = friend.status?.isOnline ?? false;
+    const onlineIndicator = `<span class="online-status ${isOnline ? 'online' : 'offline'}" title="${isOnline ? t('friends-online') : t('friends-offline')}"></span>`;
+    return `
     <div class="player-item">
       <div class="player-name">
+        ${onlineIndicator}
         <span class="player-id-display">#${friend.shortId}</span>
         <span>${escapeHTML(friend.name)}</span>
       </div>
@@ -1499,7 +1605,7 @@ function renderFriendsList() {
         <button class="btn danger" data-action="remove-friend" data-id="${friend.id}" data-name="${escapeHTML(friend.name)}" style="padding: 2px 8px; font-size: 12px;">${t('friends-remove')}</button>
       </div>
     </div>
-  `).join('');
+  `}).join('');
 }
 
 /**
@@ -2114,6 +2220,10 @@ function handleLeaveRoom(removeFromDb = true) {
     state.roomExpiryTimer = null;
   }
 
+  // フレンドのステータスリスナーを全て解除
+  Object.values(state.friendStatusListeners).forEach(({ ref, listener }) => ref.off('value', listener));
+  state.friendStatusListeners = {};
+
   state.roomRef = null;
   state.playerRef = null;
   state.roomId = null;
@@ -2322,7 +2432,8 @@ function setupEventListeners() {
   friendSearchResultEl?.addEventListener('click', (e) => {
     const target = e.target.closest('[data-action="send-friend-request"]');
     if (target) {
-      sendFriendRequest(target.dataset.id);
+      const { id, name, shortId } = target.dataset;
+      sendFriendRequest(id, name, shortId);
     }
   });
 
@@ -2334,6 +2445,13 @@ function setupEventListeners() {
     const rejectBtn = e.target.closest('[data-action="reject-friend"]');
     if (rejectBtn) {
       rejectFriendRequest(rejectBtn.dataset.id);
+    }
+  });
+
+  sentFriendRequestsListEl.addEventListener('click', (e) => {
+    const cancelBtn = e.target.closest('[data-action="cancel-friend-request"]');
+    if (cancelBtn) {
+      cancelFriendRequest(cancelBtn.dataset.id, cancelBtn.dataset.name);
     }
   });
 
@@ -2575,10 +2693,12 @@ function init() {
       try {
         const persistentUserId = getPersistentUserId();
         const shortId = await getOrCreateUserShortId(persistentUserId, state.playerName);
+        manageUserPresence();
         playerShortIdDisplay.textContent = `#${shortId}`;
         // プレイヤー情報が確定したので、フレンド関連のリスナーを開始
         listenToFriends();
         listenToFriendRequests();
+        listenToSentFriendRequests();
       } catch (error) {
         console.error("Failed to load initial player ID:", error);
       }
@@ -2594,12 +2714,64 @@ function listenToFriendRequests() {
   if (!myId || !state.db) return;
   const requestsRef = state.db.ref(`friendRequests/${myId}`);
 
+  // 既存のリスナーをデタッチして重複を防ぐ
+  requestsRef.off();
+
+  // 初回ロードかどうかを判定するフラグ
+  let isInitialLoad = true;
+
   requestsRef.on('value', (snapshot) => {
-    const requests = snapshot.val() || {};
-    state.friendRequests = Object.values(requests);
+    const requestsData = snapshot.val() || {};
+    const newRequests = Object.values(requestsData);
+
+    // 初回ロード完了後のみ通知をチェック
+    if (!isInitialLoad) {
+      const oldRequestIds = new Set(state.friendRequests.map(req => req.senderId));
+      const newlyAddedRequests = newRequests.filter(req => !oldRequestIds.has(req.senderId));
+
+      if (newlyAddedRequests.length > 0) {
+        if (newlyAddedRequests.length === 1) {
+          // 新しい申請が1件の場合
+          const newRequest = newlyAddedRequests[0];
+          showToast(t('friends-new-request-notification', { name: newRequest.senderName }), 'info', 5000);
+        } else {
+          // 新しい申請が複数件の場合
+          showToast(t('friends-new-requests-notification-multiple', { count: newlyAddedRequests.length }), 'info', 5000);
+        }
+      }
+    }
+
+    state.friendRequests = newRequests;
     renderFriendRequests();
+
+    // 初回ロード完了
+    isInitialLoad = false;
   }, (error) => {
     console.error("Error listening to friend requests:", error);
+  });
+}
+
+/**
+ * 送信済みフレンド申請をリッスンする
+ */
+function listenToSentFriendRequests() {
+  const myId = getPersistentUserId();
+  if (!myId || !state.db) return;
+  const sentRequestsRef = state.db.ref(`sentFriendRequests/${myId}`);
+
+  // 既存のリスナーをデタッチして重複を防ぐ
+  sentRequestsRef.off();
+
+  sentRequestsRef.on('value', (snapshot) => {
+    const requestsData = snapshot.val() || {};
+    state.sentFriendRequests = Object.values(requestsData);
+    renderSentFriendRequests();
+    // 検索結果が表示されている場合、ボタンの状態を更新するために再描画をトリガーする
+    if (friendSearchResultEl.innerHTML.trim() !== '') {
+      friendSearchBtn.click();
+    }
+  }, (error) => {
+    console.error("Error listening to sent friend requests:", error);
   });
 }
 
@@ -2611,16 +2783,48 @@ function listenToFriends() {
   if (!myId || !state.db) return;
   const friendsRef = state.db.ref(`users/${myId}/friends`);
 
+  // 既存のリスナーをデタッチ
+  friendsRef.off();
+  Object.values(state.friendStatusListeners).forEach(({ ref, listener }) => ref.off('value', listener));
+  state.friendStatusListeners = {};
+
+  // 初回ロードかどうかを判定するフラグ
+  let isInitialLoad = true;
+
   friendsRef.on('value', async (snapshot) => {
     const friendIds = snapshot.val() ? Object.keys(snapshot.val()) : [];
-    const friendPromises = friendIds.map(id => state.db.ref(`users/${id}`).once('value'));
     
+    const friendPromises = friendIds.map(id => state.db.ref(`users/${id}`).once('value'));
     const friendSnapshots = await Promise.all(friendPromises);
 
-    state.friends = friendSnapshots
+    const newFriends = friendSnapshots
       .map(snap => ({ id: snap.key, ...snap.val() }))
       .filter(f => f.name); // Ensure friend data exists
-    renderFriendsList();
+
+    if (!isInitialLoad && newFriends.length > state.friends.length) {
+      const oldFriendIds = state.friends.map(f => f.id);
+      const newFriend = newFriends.find(f => !oldFriendIds.includes(f.id));
+      if (newFriend) showToast(t('friends-became-friends-notification', { name: newFriend.name }), 'success', 5000);
+    }
+
+    state.friends = newFriends;
+
+    // 新しいフレンドリストに基づいてステータスリスナーを再設定
+    state.friends.forEach(friend => {
+      const friendStatusRef = state.db.ref(`users/${friend.id}/status`);
+      const listener = friendStatusRef.on('value', (statusSnap) => {
+        const status = statusSnap.val() || { isOnline: false, lastSeen: 0 };
+        const friendInState = state.friends.find(f => f.id === friend.id);
+        if (friendInState) {
+          friendInState.status = status;
+          renderFriendsList();
+        }
+      });
+      state.friendStatusListeners[friend.id] = { ref: friendStatusRef, listener: listener };
+    });
+
+    // 初回ロード完了
+    isInitialLoad = false;
   }, (error) => {
     console.error("Error listening to friends list:", error);
   });
