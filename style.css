@@ -646,6 +646,7 @@ html[data-theme="dark"] .chat-message.own .chat-bubble::after {
 .player-item + .player-item {
   margin-top: 6px;
 }
+
 .host-icon {
   font-size: 16px;
 }
@@ -915,6 +916,7 @@ body.offline::before {
   backdrop-filter: blur(8px);
   max-width: min(500px, 90vw);
   text-align: center;
+  white-space: pre-wrap; /* 改行を反映させる */
 }
 
 .toast.success {
@@ -1013,6 +1015,11 @@ body.offline::before {
   background-color: var(--prob-table-header-bg);
   position: sticky;
   top: 0;
+}
+
+.admin-table .room-remaining-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
 }
 
 .admin-table .admin-room-link {

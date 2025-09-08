@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>管理者ダッシュボード</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="app">
+    <header>
+      <h1 data-i18n-key="admin-dashboard-title">管理者ダッシュボード</h1>
+      <div class="setting-item">
+        <strong data-i18n-key="settings-theme">テーマ</strong>
+        <div class="setting-control">
+          <label class="chip"><input type="radio" name="theme" value="system"> <span data-i18n-key="theme-system">システム</span></label>
+          <label class="chip"><input type="radio" name="theme" value="light"> <span data-i18n-key="theme-light">ライト</span></label>
+          <label class="chip"><input type="radio" name="theme" value="dark"> <span data-i18n-key="theme-dark">ダーク</span></label>
+        </div>
+      </div>
+    </header>
+
+    <main class="admin-layout">
+      <div id="summary-section" class="card">
+        <h2 data-i18n-key="admin-summary-title">サーバーサマリー</h2>
+        <div class="summary-grid">
+          <div class="summary-item">
+            <span data-i18n-key="admin-active-rooms">アクティブなルーム数</span>
+            <strong id="active-rooms-count">0</strong>
+          </div>
+          <div class="summary-item">
+            <span data-i18n-key="admin-players-in-rooms">ルーム内プレイヤー数</span>
+            <strong id="players-in-rooms-count">0</strong>
+          </div>
+          <div class="summary-item">
+            <span data-i18n-key="admin-online-users">オンラインユーザー数</span>
+            <strong id="online-users-count">0</strong>
+          </div>
+          <div class="summary-item">
+            <span data-i18n-key="admin-total-users">総ユーザー数</span>
+            <strong id="total-users-count">0</strong>
+          </div>
+          <div class="summary-item">
+            <span data-i18n-key="admin-banned-users">BANユーザー数</span>
+            <strong id="banned-users-count">0</strong>
+          </div>
+        </div>
+      </div>
+      <div id="rooms-section" class="card">
+        <h2 data-i18n-key="admin-rooms-list-title">アクティブなルーム</h2>
+        <div class="table-container custom-scrollbar">
+          <table id="rooms-table" class="admin-table">
+            <thead><tr>
+              <th data-i18n-key="admin-room-id">ルームID</th>
+              <th data-i18n-key="admin-room-password">パスワード</th>
+              <th data-i18n-key="admin-room-players">人数</th>
+              <th data-i18n-key="admin-room-host">ホスト</th>
+              <th data-i18n-key="admin-room-created-at">作成日時</th>
+              <th data-i18n-key="admin-room-remaining-time">残り時間</th>
+              <th data-i18n-key="admin-room-actions">操作</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="users-section" class="card">
+        <h2 data-i18n-key="admin-users-list-title">全ユーザーリスト</h2>
+        <div class="table-container custom-scrollbar">
+          <table id="users-table" class="admin-table">
+            <thead><tr>
+              <th data-i18n-key="admin-user-status">状態</th>
+              <th data-i18n-key="admin-user-name">名前</th>
+              <th data-i18n-key="admin-user-id">ID</th>
+              <th data-i18n-key="admin-user-room">ルーム</th>
+              <th data-i18n-key="admin-user-last-seen">最終オンライン</th>
+              <th data-i18n-key="admin-user-ip">IPアドレス</th>
+              <th data-i18n-key="admin-user-actions">操作</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="announcement-section" class="card">
+        <h2 data-i18n-key="admin-announcement-title">全体アナウンス</h2>
+        <div class="setting-item">
+          <label for="announcement-message" data-i18n-key="admin-announcement-message">メッセージ</label>
+          <textarea id="announcement-message" class="input-text" rows="3" data-i18n-placeholder="admin-announcement-placeholder"></textarea>
+        </div>
+        <div class="setting-item" style="max-width: 200px; margin-top: 12px;">
+            <label for="announcement-duration" data-i18n-key="admin-announcement-duration">表示時間（秒）</label>
+            <input type="number" id="announcement-duration" class="input-text" value="15" min="5" max="60">
+        </div>
+        <div class="setting-control" style="justify-content: flex-end; margin-top: 12px;">
+          <button id="send-announcement-btn" class="btn" data-i18n-key="admin-announcement-send">送信</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2 data-i18n-key="admin-welcome">ようこそ</h2>
+        <p data-i18n-key="admin-description">ここは管理者専用ページです。今後、機能が追加される予定です。</p>
+      </div>
+    </main>
+    </div>
+  </div>
+  <!-- Modal for Members -->
+  <div id="members-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content card">
+      <div class="modal-header">
+        <h2 data-i18n-key="admin-members-modal-title">ルームメンバー</h2>
+        <button id="close-members-modal" class="btn icon secondary" title="閉じる">&times;</button>
+      </div>
+      <div id="members-modal-body" class="modal-body custom-scrollbar">
+        <!-- Member list will be populated here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal for Chat -->
+  <div id="chat-modal" class="modal-overlay" style="display: none;">
+    <div class="modal-content card">
+      <div class="modal-header">
+        <h2 data-i18n-key="admin-chat-modal-title">チャット履歴</h2>
+        <button id="close-chat-modal" class="btn icon secondary" title="閉じる">&times;</button>
+      </div>
+      <div id="chat-modal-body" class="modal-body custom-scrollbar admin-chat-messages">
+        <!-- Chat history will be populated here -->
+      </div>
+    </div>
+  </div>
+  <!-- Toast Notification -->
+  <div id="toast-container"></div>
+
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.15.0/firebase-database-compat.js"></script>
+  <script src="i18n.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>
