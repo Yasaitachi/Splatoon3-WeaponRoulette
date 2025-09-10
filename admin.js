@@ -27,7 +27,19 @@ const state = {
     members: null,
     chat: null,
   },
+  reports: [],
+  actionModal: {
+    overlay: null,
+    title: null,
+    durationContainer: null,
+    durationInput: null,
+    reasonInput: null,
+    confirmBtn: null,
+    closeBtn: null,
+    cancelBtn: null,
+  }
 };
+let isInitialLoadComplete = false;
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -152,12 +164,53 @@ function renderRooms() {
   }).join('');
 }
 
+function renderReports() {
+  const tbody = $('#reports-table tbody');
+  if (!tbody) return;
+
+  const sortedReports = [...state.reports].sort((a, b) => b.timestamp - a.timestamp);
+
+  tbody.innerHTML = sortedReports.map(report => {
+    const timestamp = new Date(report.timestamp).toLocaleString();
+    const statusText = t(`admin-report-status-${report.status}`) || report.status;
+    const isReviewed = report.status === 'reviewed';
+
+    return `
+      <tr data-report-id="${report.id}" class="status-${report.status}">
+        <td>${timestamp}</td>
+        <td>${report.reporterName || 'N/A'}</td>
+        <td>${report.reportedUserName || 'N/A'}</td>
+        <td class="report-reason">${report.reason}</td>
+        <td>${report.roomId || 'N/A'}</td>
+        <td>${statusText}</td>
+        <td>
+          <button class="btn-admin-action" data-action="update-report-status" data-report-id="${report.id}" data-status="reviewed" ${isReviewed ? 'disabled' : ''}>
+            ${t('admin-report-mark-reviewed')}
+          </button>
+        </td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function updateReportStatus(reportId, newStatus) {
+  try {
+    await state.db.ref(`reports/${reportId}/status`).set(newStatus);
+    showToast(t('admin-report-status-updated'), 'success');
+  } catch (error) {
+    console.error(`Failed to update report ${reportId} status:`, error);
+    showToast(t('admin-report-status-update-fail'), 'error');
+  }
+}
+
 async function sendAnnouncement() {
   const messageInput = $('#announcement-message');
   const durationInput = $('#announcement-duration');
+  const levelInput = $('input[name="announcement-level"]:checked');
   
   const message = messageInput.value.trim();
   const duration = parseInt(durationInput.value, 10) * 1000; // convert to ms
+  const level = levelInput.value;
 
   if (!message) {
     showToast(t('admin-announcement-error-no-message'), 'error');
@@ -173,6 +226,7 @@ async function sendAnnouncement() {
   const announcementData = {
     message: message,
     duration: duration,
+    level: level,
     sender: state.users.find(u => u.id === getPersistentUserId())?.name || 'Admin',
     timestamp: firebase.database.ServerValue.TIMESTAMP
   };
@@ -191,6 +245,16 @@ function renderUsers() {
   const tbody = $('#users-table tbody');
   if (!tbody) return;
 
+  const searchQuery = $('#user-search-input')?.value.toLowerCase().trim() || '';
+
+  const filteredUsers = state.users.filter(user => {
+    if (!searchQuery) return true;
+    const nameMatch = user.name?.toLowerCase().includes(searchQuery);
+    // shortId is a string, so .includes() is fine.
+    const shortIdMatch = user.shortId?.includes(searchQuery);
+    return nameMatch || shortIdMatch;
+  });
+
   // 1. Create a map of user ID to room ID for quick lookup
   const userRoomMap = new Map();
   state.rooms.forEach(room => {
@@ -202,7 +266,7 @@ function renderUsers() {
   });
 
   // 2. Sort users: online first, then by last seen
-  const sortedUsers = [...state.users].sort((a, b) => {
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
     const aOnline = a.status?.isOnline;
     const bOnline = b.status?.isOnline;
     if (aOnline && !bOnline) return -1;
@@ -216,7 +280,6 @@ function renderUsers() {
     const statusClass = isOnline ? 'online' : 'offline';
     const statusText = isOnline ? t('friends-online') : t('friends-offline');
     const lastSeen = user.status?.lastSeen ? new Date(user.status.lastSeen).toLocaleString() : 'N/A';
-    const lastIP = user.status?.lastIP || 'N/A';
     const roomId = userRoomMap.get(user.id) || '—';
     const isBanned = state.bannedUsers.includes(user.id);
     const isDisplayedUserAdmin = ADMIN_USER_IDS.map(id => id.toLowerCase()).includes(user.id.toLowerCase());
@@ -226,8 +289,10 @@ function renderUsers() {
         const banButton = isBanned
             ? `<button class="btn-admin-action" data-action="unban-user" data-user-id="${user.id}" data-user-name="${user.name}">${t('admin-user-unban')}</button>`
             : `<button class="btn-admin-action danger" data-action="ban-user" data-user-id="${user.id}" data-user-name="${user.name}">${t('admin-user-ban')}</button>`;
+        const timeoutButton = `<button class="btn-admin-action warning" data-action="timeout-user" data-user-id="${user.id}" data-user-name="${user.name}">${t('admin-user-timeout')}</button>`;
         actionButtons = `
             <button class="btn-admin-action" data-action="change-id" data-user-id="${user.id}" data-user-name="${user.name}" data-user-short-id="${user.shortId}">${t('admin-user-change-id')}</button>
+            ${timeoutButton}
             ${banButton}
             <button class="btn-admin-action danger" data-action="delete-user" data-user-id="${user.id}" data-user-name="${user.name}" data-user-short-id="${user.shortId}">${t('admin-user-delete')}</button>
         `;
@@ -240,7 +305,6 @@ function renderUsers() {
         <td>#${user.shortId || '-----'}</td>
         <td>${roomId}</td>
         <td>${lastSeen}</td>
-        <td>${lastIP}</td>
         <td><div style="display: flex; gap: 6px;">${actionButtons}</div></td>
       </tr>
     `;
@@ -309,12 +373,13 @@ async function deleteUserAccount(userId, userName, shortId, event = {}) {
     }
 }
 
-async function banUser(userId, userName, event = {}) {
-  if (!event.shiftKey && !confirm(t('admin-user-ban-confirm', { name: userName }))) return;
-
+async function executeBan(userId, userName, reason) {
   const adminId = getPersistentUserId();
-  const userSnap = await state.db.ref(`users/${userId}`).once('value');
-  const userData = userSnap.val();
+  const adminUser = state.users.find(u => u.id === adminId);
+  const adminName = adminUser ? adminUser.name : 'Admin';
+
+  // Find the user to be banned from the global state
+  const userData = state.users.find(u => u.id === userId);
 
   if (!userData) {
     showToast('User data not found.', 'error');
@@ -326,7 +391,8 @@ async function banUser(userId, userName, event = {}) {
     shortId: userData.shortId,
     bannedAt: firebase.database.ServerValue.TIMESTAMP,
     bannedBy: adminId,
-    ip: userData.status?.lastIP || null,
+    bannedByAdminName: adminName,
+    reason: reason || '',
   };
 
   try {
@@ -336,6 +402,10 @@ async function banUser(userId, userName, event = {}) {
     console.error(`Failed to ban user ${userName}:`, error);
     showToast(t('admin-user-ban-fail', { name: userName }), 'error');
   }
+}
+
+function banUser(userId, userName) {
+  openActionConfirmModal('ban', userId, userName);
 }
 
 async function unbanUser(userId, userName, event = {}) {
@@ -360,6 +430,79 @@ async function dissolveRoom(roomId, event = {}) {
     console.error(`Failed to dissolve room ${roomId}:`, error);
     showToast(t('admin-room-dissolve-fail', { roomId }), 'error');
   }
+}
+
+async function executeTimeout(userId, userName, duration, reason) {
+  if (isNaN(duration) || duration <= 0) {
+    showToast(t('invalid-duration-error'), 'error');
+    return;
+  }
+
+  const expiresAt = Date.now() + duration * 60 * 1000;
+  const adminId = getPersistentUserId();
+  const adminUser = state.users.find(u => u.id === adminId);
+  const adminName = adminUser ? adminUser.name : 'Administrator';
+
+  try {
+    // Set the global timeout regardless of whether the user is in a room
+    await state.db.ref(`globalMutedUsers/${userId}`).set({
+        expiresAt,
+        reason: reason || '',
+        mutedByAdminName: adminName,
+    });
+
+    // If the user is in a room, send a notification message to that room as well.
+    let roomIdFound = null;
+    for (const room of state.rooms) {
+        if (room.clients && room.clients[userId]) {
+            roomIdFound = room.id;
+            break;
+        }
+    }
+    if (roomIdFound) {
+      const message = t('system-player-muted', { name: userName, admin: adminName, duration: duration });
+      await state.db.ref(`rooms/${roomIdFound}/chat`).push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
+    }
+    showToast(t('admin-user-timeout-success', { name: userName, duration: duration }), 'success');
+  } catch (error) {
+    console.error(`Failed to timeout user ${userName}:`, error);
+    showToast(t('admin-user-timeout-fail', { name: userName }), 'error');
+  }
+}
+
+function timeoutUserFromDashboard(userId, userName) {
+  openActionConfirmModal('timeout', userId, userName);
+}
+
+function openActionConfirmModal(action, userId, userName) {
+  const { overlay, title, durationContainer, durationInput, reasonInput, confirmBtn } = state.actionModal;
+
+  // Reset fields
+  reasonInput.value = '';
+  durationInput.value = '5';
+
+  confirmBtn.dataset.action = action;
+  confirmBtn.dataset.userId = userId;
+  confirmBtn.dataset.userName = userName;
+
+  if (action === 'ban') {
+    title.textContent = t('admin-ban-reason-title', { name: userName });
+    durationContainer.style.display = 'none';
+    confirmBtn.textContent = t('admin-action-confirm-ban');
+    confirmBtn.className = 'btn danger';
+  } else if (action === 'timeout') {
+    title.textContent = t('admin-timeout-reason-title', { name: userName });
+    durationContainer.style.display = 'block';
+    confirmBtn.textContent = t('admin-action-confirm-timeout');
+    confirmBtn.className = 'btn warning';
+  }
+
+  overlay.style.display = 'flex';
+  reasonInput.focus();
+}
+
+function closeActionConfirmModal() {
+  state.actionModal.overlay.style.display = 'none';
 }
 
 function detachActiveRoomListeners() {
@@ -524,46 +667,61 @@ function listenToData() {
 
   const usersRef = state.db.ref('users');
 
-  // More efficient listeners for user data
-  usersRef.on('child_added', (snapshot) => {
-    const newUser = { id: snapshot.key, ...snapshot.val() };
-    const index = state.users.findIndex(u => u.id === newUser.id);
-    if (index === -1) {
-      state.users.push(newUser);
-    } else {
-      state.users[index] = newUser; // Replace if already exists (should be rare)
-    }
+  usersRef.on('value', (snapshot) => {
+    const usersData = snapshot.val() || {};
+    state.users = Object.entries(usersData).map(([id, data]) => ({ id, ...data }));
     renderUsers();
     renderSummary();
+
+    // Hide loader after the first successful data load
+    if (!isInitialLoadComplete) {
+      isInitialLoadComplete = true;
+      const initLoaderOverlay = $('#init-loader-overlay');
+      initLoaderOverlay.classList.remove('visible');
+      initLoaderOverlay.addEventListener('transitionend', () => initLoaderOverlay.remove(), { once: true });
+    }
   });
 
-  usersRef.on('child_changed', (snapshot) => {
-    const updatedUser = { id: snapshot.key, ...snapshot.val() };
-    const index = state.users.findIndex(u => u.id === updatedUser.id);
-    if (index !== -1) {
-      state.users[index] = updatedUser;
+  const bannedUsersRef = state.db.ref('bannedUsers');
+  bannedUsersRef.on('child_added', (snapshot) => {
+    const userId = snapshot.key;
+    if (!state.bannedUsers.includes(userId)) {
+      state.bannedUsers.push(userId);
       renderUsers();
       renderSummary();
     }
   });
 
-  usersRef.on('child_removed', (snapshot) => {
-    state.users = state.users.filter(u => u.id !== snapshot.key);
-    renderUsers();
-    renderSummary();
+  bannedUsersRef.on('child_removed', (snapshot) => {
+    const userId = snapshot.key;
+    const index = state.bannedUsers.indexOf(userId);
+    if (index > -1) {
+      state.bannedUsers.splice(index, 1);
+      renderUsers();
+      renderSummary();
+    }
   });
 
-  const bannedUsersRef = state.db.ref('bannedUsers');
-  bannedUsersRef.on('value', snapshot => {
-    const bannedData = snapshot.val() || {};
-    state.bannedUsers = Object.keys(bannedData);
-    renderUsers();
-    renderSummary();
+  const reportsRef = state.db.ref('reports');
+  reportsRef.on('value', snapshot => {
+    const reportsData = snapshot.val() || {};
+    state.reports = Object.entries(reportsData).map(([id, data]) => ({ id, ...data }));
+    renderReports();
   });
 }
 
 function init() {
+  const initLoaderText = $('#init-loader-text');
+
+  // Set language early for loader text
+  const savedLang = localStorage.getItem('splaRouletteSettings') ? JSON.parse(localStorage.getItem('splaRouletteSettings')).lang : 'ja';
+  state.lang = savedLang;
+  document.documentElement.lang = state.lang;
+  updateUIText(); // Update static text first
+
+  if (initLoaderText) initLoaderText.textContent = t('admin-checking-permissions');
   if (!checkAdminAccess()) return;
+  if (initLoaderText) initLoaderText.textContent = t('admin-loading-data');
 
   // --- Initialize Firebase ---
   if (!firebase.apps.length) {
@@ -571,13 +729,18 @@ function init() {
   }
   state.db = firebase.database();
 
-  // --- Load Settings and Apply Theme ---
-  const savedLang = localStorage.getItem('splaRouletteSettings') ? JSON.parse(localStorage.getItem('splaRouletteSettings')).lang : 'ja';
-  state.lang = savedLang;
-  document.documentElement.lang = state.lang;
-
   const savedTheme = localStorage.getItem('splaRouletteAdminTheme') || 'system';
   applyTheme(savedTheme);
+
+  // --- Cache Modal DOM elements ---
+  state.actionModal.overlay = $('#action-confirm-modal');
+  state.actionModal.title = $('#action-modal-title');
+  state.actionModal.durationContainer = $('#action-duration-container');
+  state.actionModal.durationInput = $('#action-duration-input');
+  state.actionModal.reasonInput = $('#action-reason-input');
+  state.actionModal.confirmBtn = $('#confirm-action-btn');
+  state.actionModal.closeBtn = $('#close-action-modal');
+  state.actionModal.cancelBtn = $('#cancel-action-btn');
 
   // --- Setup Event Listeners ---
   $$('input[name="theme"]').forEach(radio => radio.addEventListener('change', (e) => applyTheme(e.target.value)));
@@ -617,7 +780,7 @@ function init() {
 
     const banBtn = e.target.closest('[data-action="ban-user"]');
     if (banBtn) {
-      banUser(banBtn.dataset.userId, banBtn.dataset.userName, e);
+      banUser(banBtn.dataset.userId, banBtn.dataset.userName);
       return;
     }
 
@@ -631,6 +794,21 @@ function init() {
     if (deleteUserBtn) {
       deleteUserAccount(deleteUserBtn.dataset.userId, deleteUserBtn.dataset.userName, deleteUserBtn.dataset.userShortId, e);
       return;
+    }
+
+    const timeoutBtn = e.target.closest('[data-action="timeout-user"]');
+    if (timeoutBtn) {
+      timeoutUserFromDashboard(timeoutBtn.dataset.userId, timeoutBtn.dataset.userName);
+      return;
+    }
+  });
+
+  // Add event listener for report actions
+  $('#reports-table')?.addEventListener('click', e => {
+    const updateStatusBtn = e.target.closest('[data-action="update-report-status"]');
+    if (updateStatusBtn) {
+      const { reportId, status } = updateStatusBtn.dataset;
+      updateReportStatus(reportId, status);
     }
   });
 
@@ -658,7 +836,29 @@ function init() {
     }
   });
 
+  // Action confirmation modal listeners
+  const { overlay, confirmBtn, closeBtn, cancelBtn } = state.actionModal;
+  confirmBtn.addEventListener('click', () => {
+    const { action, userId, userName } = confirmBtn.dataset;
+    const reason = state.actionModal.reasonInput.value.trim();
+
+    if (action === 'ban') {
+      executeBan(userId, userName, reason);
+    } else if (action === 'timeout') {
+      const duration = parseInt(state.actionModal.durationInput.value, 10);
+      executeTimeout(userId, userName, duration, reason);
+    }
+    closeActionConfirmModal();
+  });
+
+  closeBtn.addEventListener('click', closeActionConfirmModal);
+  cancelBtn.addEventListener('click', closeActionConfirmModal);
+  overlay.addEventListener('click', e => {
+    if (e.target === overlay) closeActionConfirmModal();
+  });
   $('#send-announcement-btn')?.addEventListener('click', sendAnnouncement);
+
+  $('#user-search-input')?.addEventListener('input', renderUsers);
 
 
   // --- Initial Render and Start Listening ---

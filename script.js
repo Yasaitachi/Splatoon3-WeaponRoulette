@@ -53,6 +53,7 @@ const state = {
   sentFriendRequests: [],
   friendStatusListeners: {},
   isBanned: false,
+  globalMuteInfo: null,
 };
 
 const ICONS = {
@@ -118,22 +119,6 @@ const realtimeModal = $('#realtimeModal');
 
 function getWeaponName(weapon) {
   return state.lang === 'en' && weapon.name_en ? weapon.name_en : weapon.name;
-}
-
-/**
- * 3rd-party API to get public IP address.
- * @returns {Promise<string|null>}
- */
-async function getIPAddress() {
-  try {
-    const response = await fetch('https://api.ipify.org?format=json');
-    if (!response.ok) return null;
-    const data = await response.json();
-    return data.ip;
-  } catch (error) {
-    console.error("Could not get IP address:", error);
-    return null;
-  }
 }
 
 /**
@@ -1335,13 +1320,29 @@ function updatePlayerList(players) {
     const isMuted = state.mutedUsers && state.mutedUsers[player.id];
     const mutedIndicator = isMuted ? ` <span class="muted-icon" title="${t('player-muted-indicator')}">🔇</span>` : '';
 
-    let adminControls = '';
-    if (isAdmin && !isMe) {
-        adminControls = `
-          <div class="player-actions">
-              <button class="btn-kick menu" data-action="admin-menu" data-player-id="${player.id}" data-player-name="${player.name}" title="${t('realtime-admin-menu')}">︙</button>
-          </div>
-        `;
+    let actionButtons = '';
+    if (!isMe) {
+      // Friend request button logic
+      const isAlreadyFriend = state.friends.some(f => f.id === player.id);
+      const isRequestSent = state.sentFriendRequests.some(req => req.recipientId === player.id);
+      const hasReceivedRequest = state.friendRequests.some(req => req.senderId === player.id);
+
+      let friendButton = '';
+      if (!isAlreadyFriend && !isRequestSent && !hasReceivedRequest) {
+        friendButton = `<button class="btn-kick add-friend" data-action="send-friend-request" data-player-id="${player.id}" data-player-name="${escapeHTML(player.name)}" data-player-short-id="${player.shortId}" title="${t('friends-send-request')}">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="23" x2="23" y1="11" y2="17"/><line x1="20" x2="26" y1="14" y2="14"/></svg>
+        </button>`;
+      } else if (isRequestSent) {
+        friendButton = `<button class="btn-kick request-sent" disabled title="${t('friends-request-sent-label')}">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+        </button>`;
+      }
+
+      const reportButton = `<button class="btn-kick report" data-action="report-player" data-player-id="${player.id}" data-player-name="${escapeHTML(player.name)}" title="${t('report-button-title', { name: escapeHTML(player.name) })}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"></path><line x1="4" y1="22" x2="4" y2="15"></line></svg>
+        </button>`;
+      const adminMenuButton = isAdmin ? `<button class="btn-kick menu" data-action="admin-menu" data-player-id="${player.id}" data-player-name="${player.name}" title="${t('realtime-admin-menu')}">︙</button>` : '';
+      actionButtons = `<div class="player-actions">${friendButton}${reportButton}${adminMenuButton}</div>`;
     }
 
     return `
@@ -1351,10 +1352,46 @@ function updatePlayerList(players) {
           <span>${escapeHTML(player.name)}${hostIndicator}${mutedIndicator}</span>
           ${meIndicator}
         </div>
-        ${adminControls}
+        ${actionButtons}
     </div>
     `;
   }).join('');
+}
+
+async function submitReport() {
+  const reportModal = $('#reportModal');
+  const submitBtn = $('#submitReportBtn');
+  const reason = $('#reportReason').value.trim();
+  const reportedUserId = submitBtn.dataset.reportedUserId;
+  const reportedUserName = submitBtn.dataset.reportedUserName;
+
+  if (!reason) {
+    showToast(t('report-reason-required'), 'error');
+    return;
+  }
+
+  const reporterId = getPersistentUserId();
+  const reporterName = state.playerName;
+
+  const reportData = {
+    reporterId,
+    reporterName,
+    reportedUserId,
+    reportedUserName,
+    reason,
+    roomId: state.roomId,
+    timestamp: firebase.database.ServerValue.TIMESTAMP,
+    status: 'new', // 'new', 'reviewed'
+  };
+
+  try {
+    await state.db.ref('reports').push(reportData);
+    showToast(t('report-submitted-success'), 'success');
+    reportModal.style.display = 'none';
+    $('#reportReason').value = '';
+  } catch (error) {
+    showServerError(t('report-submitted-fail'), error);
+  }
 }
 
 /**
@@ -1436,6 +1473,12 @@ async function sendFriendRequest(targetUserId, targetUserName, targetUserShortId
   }
   if (state.sentFriendRequests.some(req => req.recipientId === targetUserId)) {
     showToast(t('friends-request-already-sent'), 'info');
+    return;
+  }
+  // 相手から申請が来ている場合、承認を促す
+  if (state.friendRequests.some(req => req.senderId === targetUserId)) {
+    showToast(t('friends-request-received-from-user', { name: targetUserName }), 'info', 5000);
+    friendsModal.style.display = 'flex'; // フレンドモーダルを開く
     return;
   }
 
@@ -1790,15 +1833,6 @@ function banPlayer(playerId, playerName) {
     const playerToBan = state.players.find(p => p.id === playerId);
     if (!playerToBan) return; // Should not happen if UI is correct
 
-    // IPアドレスが取得できていない場合のフォールバック処理
-    if (!playerToBan.ip) {
-        if (confirm(t('realtime-ban-no-ip-confirm', { name: playerName }))) {
-            // IP BANができないので、代わりに名前ブロックを実行
-            blockPlayer(playerId, playerName);
-        }
-        return;
-    }
-
     // プレイヤーにBANされたことを通知
     state.roomRef.child('notifications').child(playerId).set({
         type: 'ban',
@@ -1806,7 +1840,6 @@ function banPlayer(playerId, playerName) {
         timestamp: firebase.database.ServerValue.TIMESTAMP
     });
 
-    state.roomRef.child('bannedIPs').push(playerToBan.ip);
     state.roomRef.child('blockedNames').push(playerName); // BANは名前ブロックも兼ねる
     const message = t('system-player-banned', { name: playerName, host: state.playerName });
     state.roomRef.child('chat').push({ name: null, message, isSystem: true, timestamp: firebase.database.ServerValue.TIMESTAMP });
@@ -1837,7 +1870,6 @@ async function createRoom() { // UIの状態を更新して、処理中である
     }
     const persistentUserId = getPersistentUserId();
 
-    const ip = await getIPAddress();
     const roomsRef = state.db.ref('rooms');
     let newRoomId;
     let roomExists = true;
@@ -1865,12 +1897,10 @@ async function createRoom() { // UIの状態を更新して、処理中である
       name: state.playerName,
       shortId: playerShortId,
       joinedAt: firebase.database.ServerValue.TIMESTAMP,
-      ip: ip
     });
     // ホストが予期せず切断した場合は、ルーム全体を削除する
     state.roomRef.onDisconnect().remove();
     listenToRoomChanges();
-    await state.db.ref(`users/${persistentUserId}/status/lastIP`).set(ip);
     $('#realtimeModal').style.display = 'none';
     // ルーム作成時に現在のフィルター状態を書き込む
     updateFiltersOnFirebase();
@@ -1908,9 +1938,17 @@ async function joinRoom() {
     }
 
     const playerNameForJoin = state.playerName.trim();
+    if (!playerNameForJoin) {
+      showToast(t('player-name-required'), 'error');
+      playerSettingsModal.style.display = 'flex';
+      settingsPlayerNameInput.focus();
+      return;
+    }
 
     state.roomId = roomId;
     state.roomRef = state.db.ref(`rooms/${state.roomId}`);
+
+    const persistentUserId = getPersistentUserId();
 
     const snapshot = await state.roomRef.once('value');
     if (!snapshot.exists()) {
@@ -1919,7 +1957,6 @@ async function joinRoom() {
     }
 
     const roomData = snapshot.val();
-    const ip = await getIPAddress();
 
     // Check password
     if (roomData.password !== password) {
@@ -1934,18 +1971,10 @@ async function joinRoom() {
         return;
     }
 
-    // Check if banned by IP
-    const bannedIPsSnapshot = await state.roomRef.child('bannedIPs').once('value');
-    const bannedIPs = Object.values(bannedIPsSnapshot.val() || {});
-    if (ip && bannedIPs.includes(ip)) {
-        showToast(t('realtime-error-banned'), 'error', 6000);
-        return;
-    }
-
     // Check if blocked by name
     const blockedNamesSnapshot = await state.roomRef.child('blockedNames').once('value');
     const blockedNames = Object.values(blockedNamesSnapshot.val() || {});
-    if (blockedNames.includes(name)) {
+    if (blockedNames.includes(playerNameForJoin)) {
         showToast(t('realtime-error-blocked'), 'error', 6000);
         return;
     }
@@ -1961,18 +1990,13 @@ async function joinRoom() {
 
     const playerShortId = await getOrCreateUserShortId(persistentUserId, playerNameForJoin);
 
-    const persistentUserId = getPersistentUserId();
     state.playerRef = state.roomRef.child('clients').child(persistentUserId);
     await state.playerRef.set({
       name: playerNameForJoin,
       shortId: playerShortId,
       joinedAt: firebase.database.ServerValue.TIMESTAMP,
-      ip: ip,
     });
     state.playerRef.onDisconnect().remove();
-
-    // 通常の参加の場合のみIPを更新
-    await state.db.ref(`users/${persistentUserId}/status/lastIP`).set(ip);
     listenToRoomChanges();
     $('#realtimeModal').style.display = 'none';
   } catch (error) {
@@ -2115,7 +2139,6 @@ function listenToRoomChanges() {
           name: val.name,
           shortId: val.shortId,
           isHost: key === hostId,
-          ip: val.ip || null,
         }));
 
       state.players = playerArray;
@@ -2321,7 +2344,6 @@ function handleLeaveRoom(removeFromDb = true) {
   joinRoomBtn.disabled = false;
   createRoomBtn.textContent = t('realtime-create-btn');
   joinRoomBtn.textContent = t('realtime-join-btn');
-  ghostJoinCheckbox.checked = false;
   roomPasswordInput.value = '';
 
   setRealtimeUiState('disconnected');
@@ -2341,19 +2363,30 @@ function handleLeaveRoom(removeFromDb = true) {
 function sendChatMessage() {
   const message = chatInput.value.trim();
   if (message && state.roomRef) {
-    // Check if muted
+    const now = Date.now();
     const myId = state.playerRef.key;
+
+    // Check for global mute first
+    if (state.globalMuteInfo && state.globalMuteInfo.expiresAt > now) {
+        const expiryTime = new Date(state.globalMuteInfo.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        showToast(t('chat-error-muted', { time: expiryTime }), 'error');
+        return;
+    }
+
+    // Check if muted
     const myMuteInfo = state.mutedUsers[myId];
-    if (myMuteInfo && myMuteInfo.expiresAt > Date.now()) {
+    if (myMuteInfo && myMuteInfo.expiresAt > now) {
       const expiryTime = new Date(myMuteInfo.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       showToast(t('chat-error-muted', { time: expiryTime }), 'error');
       return;
     }
 
     state.roomRef.child('chat').push({
-      name: state.playerName,
-      message: message,
-      timestamp: firebase.database.ServerValue.TIMESTAMP
+        name: state.playerName,
+        message: message,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+    }).catch(error => {
+        showServerError(t('chat-send-fail'), error);
     });
     chatInput.value = '';
     chatInput.focus(); // 送信後も入力欄にフォーカスを維持
@@ -2453,15 +2486,33 @@ function setupEventListeners() {
   });
 
   playerListEl.addEventListener('click', (e) => {
-    const target = e.target.closest('.player-name[data-player-name]');
-    if (!target) return;
-
-    const playerName = target.dataset.playerName;
-    if (playerName) {
+    // Handle mention click
+    const mentionTarget = e.target.closest('.player-name[data-player-name]');
+    if (mentionTarget) {
+      const playerName = mentionTarget.dataset.playerName;
       e.stopPropagation();
       const separator = (chatInput.value.length > 0 && !chatInput.value.endsWith(' ')) ? ' ' : '';
       chatInput.value += `${separator}@${playerName} `;
       chatInput.focus();
+      return; // Mention action is exclusive, so we stop here.
+    }
+
+    // Handle report button click
+    const reportBtn = e.target.closest('[data-action="report-player"]');
+    if (reportBtn) {
+      const { playerId, playerName } = reportBtn.dataset;
+      const reportModal = $('#reportModal');
+      $('#reportTargetName').textContent = playerName;
+      $('#submitReportBtn').dataset.reportedUserId = playerId;
+      $('#submitReportBtn').dataset.reportedUserName = playerName;
+      reportModal.style.display = 'flex';
+    }
+
+    // Handle friend request button click
+    const addFriendBtn = e.target.closest('[data-action="send-friend-request"]');
+    if (addFriendBtn) {
+      const { playerId, playerName, playerShortId } = addFriendBtn.dataset;
+      sendFriendRequest(playerId, playerName, playerShortId);
     }
   });
 
@@ -2656,6 +2707,18 @@ function setupEventListeners() {
     }
   });
 
+  // Report Modal
+  const reportModal = $('#reportModal');
+  const closeReportModalBtn = $('#closeReportModalBtn');
+  const submitReportBtn = $('#submitReportBtn');
+  closeReportModalBtn.addEventListener('click', () => reportModal.style.display = 'none');
+  reportModal.addEventListener('click', (e) => {
+    if (e.target === reportModal) {
+      reportModal.style.display = 'none';
+    }
+  });
+  submitReportBtn.addEventListener('click', submitReport);
+
   // --- 音声入力の初期化 ---
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (SpeechRecognition) {
@@ -2740,8 +2803,11 @@ async function initializeBanListener() {
 
     if (isCurrentlyBanned) {
       // BANされたときにルームに参加している場合は退出させる
-      if (state.roomRef) {
-        handleLeaveRoom(false);
+      if (state.roomRef && state.playerRef) {
+        // DBからプレイヤー情報を削除することで、'clients'リスナーが退出を検知して処理する
+        // これにより、処理の順序が保証され、画面が固まるのを防ぐ
+        state.playerRef.onDisconnect().cancel();
+        state.playerRef.remove();
         showToast(t('realtime-error-banned-globally'), 'error', 8000);
       }
       // オンライン関連のモーダルが開いていれば閉じる
@@ -2773,8 +2839,30 @@ function listenToAnnouncements() {
 
     // Use a more prominent format for announcements
     const message = `📢 ${t('announcement-prefix')}\n\n${announcement.message}`;
-    showToast(message, 'info', announcement.duration || 15000);
+    const toastType = announcement.level || 'info';
+    showToast(message, toastType, announcement.duration || 15000);
   });
+}
+
+/**
+ * Listen for global mutes applied to the current user.
+ */
+function listenToGlobalMute() {
+    const myId = getPersistentUserId();
+    if (!myId || !state.db) return;
+    const muteRef = state.db.ref(`globalMutedUsers/${myId}`);
+    muteRef.on('value', (snapshot) => {
+        const muteInfo = snapshot.val();
+        if (muteInfo && muteInfo.expiresAt > Date.now()) {
+            state.globalMuteInfo = muteInfo;
+        } else {
+            state.globalMuteInfo = null;
+            // If mute expired, remove it from DB
+            if (muteInfo) {
+                muteRef.remove();
+            }
+        }
+    });
 }
 
 function init() {
@@ -2857,6 +2945,7 @@ function init() {
         // BAN状態をチェック。BANされている場合、一部機能が制限される。
         await initializeBanListener();
         listenToAnnouncements();
+        listenToGlobalMute();
 
         const persistentUserId = getPersistentUserId();
         const shortId = await getOrCreateUserShortId(persistentUserId, state.playerName);
